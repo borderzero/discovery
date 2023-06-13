@@ -6,15 +6,57 @@
 
 Border0 service discovery framework and library.
 
+### Example: Discover EC2, ECS, and RDS Resources (In Parallel)
+
+Assume that the following variables are defined as follows:
+
+```
+ctx := context.Background()
+awsConfig := config.LoadDefaultConfig(ctx)
+awsAccountId := "123456789012"
+```
+
+Then,
+
+```
+// initialize a new multiple upstream discoverer
+discoverer := discoverers.NewMultipleUpstreamDiscoverer(
+	discoverers.WithUpstreamDiscoverers(
+		discoverers.NewAwsEc2Discoverer(awsConfig, awsAccountId),
+		discoverers.NewAwsEcsDiscoverer(awsConfig, awsAccountId),
+		discoverers.NewAwsRdsDiscoverer(awsConfig, awsAccountId),
+		// ... docker, k8s, LAN, gcp compute, azure vms, etc ...
+	),
+)
+
+// create channels for discovered resources and errors
+resources := make(chan []discovery.Resource)
+errors := make(chan error)
+
+go func() {
+	for _, batch := range resources {
+		// do something with resources batch
+	}
+}()
+go func() {
+	for _, err := range errors {
+		// do something with error
+	}
+}()
+
+// run discoverer
+discoverer.Discover(ctx, resources, errors)
+```
+
 ### Example: Discover EC2 Instances In Multiple AWS Regions (In Parallel)
 
 Assume that the following variables are defined as follows:
 
 ```
 ctx := context.Background()
+awsConfig := config.LoadDefaultConfig(ctx)
 awsAccountId := "123456789012"
 awsRegions := []string{"us-east-1", "us-east-2", "us-west-2", "eu-west-1"}
-awsConfig := config.LoadDefaultConfig(ctx)
 ```
 
 Then,
@@ -35,14 +77,18 @@ d := discoverers.NewMultipleUpstreamDiscoverer(discoverers.WithUpstreamDiscovere
 resources := make(chan []discovery.Resource)
 errors := make(chan error)
 
+go func() {
+	for _, batch := range resources {
+		// do something with resources batch
+	}
+}()
+go func() {
+	for _, err := range errors {
+		// do something with error
+	}
+}()
+
 // run discoverer
 d.Discover(ctx, resources, errors)
-
-for _, batch := range resources {
-	// do something with resources
-}
-for _, err := range errors {
-	// do something with errors
-}
 ```
 
