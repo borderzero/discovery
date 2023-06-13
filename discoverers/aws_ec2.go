@@ -1,4 +1,4 @@
-package multiple_upstream
+package discoverers
 
 import (
 	"context"
@@ -20,11 +20,11 @@ type AwsEc2Discoverer struct {
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsEc2Discoverer)(nil)
 
-// Option is an input option for the AwsEc2Discoverer constructor.
-type Option func(*AwsEc2Discoverer)
+// AwsEc2DiscovererOption is an input option for the AwsEc2Discoverer constructor.
+type AwsEc2DiscovererOption func(*AwsEc2Discoverer)
 
 // NewEngine returns a new engine, initialized with the given options.
-func NewAwsEc2Discoverer(cfg aws.Config, awsAccountId string, opts ...Option) *AwsEc2Discoverer {
+func NewAwsEc2Discoverer(cfg aws.Config, awsAccountId string, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
 	ec2d := &AwsEc2Discoverer{cfg: cfg, awsAccountId: awsAccountId}
 	for _, opt := range opts {
 		opt(ec2d)
@@ -39,6 +39,13 @@ func (ec2d *AwsEc2Discoverer) Discover(
 	resources chan<- []discovery.Resource,
 	errors chan<- error,
 ) {
+	// discover routines are in charge of
+	// closing their channels when done
+	defer func() {
+		close(resources)
+		close(errors)
+	}()
+
 	ec2Client := ec2.NewFromConfig(ec2d.cfg)
 
 	describeInstancesOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{})
