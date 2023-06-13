@@ -15,7 +15,7 @@ type AwsRdsDiscoverer struct {
 	awsAccountId string
 }
 
-// ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
+// ensure AwsRdsDiscoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsRdsDiscoverer)(nil)
 
 // AwsRdsDiscovererOption is an input option for the AwsRdsDiscoverer constructor.

@@ -8,8 +8,8 @@ const (
 	// ResourceTypeAwsEc2Instance is the resource type for AWS EC2 instances.
 	ResourceTypeAwsEc2Instance = "aws_ec2_instance"
 
-	// ResourceTypeAwsEcsContainer is the resource type for AWS ECS containers.
-	ResourceTypeAwsEcsContainer = "aws_ecs_container"
+	// ResourceTypeAwsEcsCluster is the resource type for AWS ECS clusters.
+	ResourceTypeAwsEcsCluster = "aws_ecs_cluster"
 
 	// ResourceTypeAwsRdsInstnace is the resource type for AWS RDS instances.
 	ResourceTypeAwsRdsInstance = "aws_rds_instance"
@@ -39,14 +39,14 @@ type AwsEc2InstanceDetails struct {
 	// TODO: add any fields as needed here
 }
 
-// AwsEcsContainerDetails represents the details of a discovered AWS ECS container.
-type AwsEcsContainerDetails struct {
+// AwsEcsClusterDetails represents the details of a discovered AWS ECS cluster.
+type AwsEcsClusterDetails struct {
 	AwsBaseDetails // extends
 
-	ClusterName   string `json:"cluser_name"`
-	ServiceName   string `json:"service_name"`
-	TaskName      string `json:"task_name"`
-	ContainerName string `json:"container_name"`
+	ClusterName string   `json:"cluster_name"`
+	Services    []string `json:"services"`
+	Tasks       []string `json:"tasks"`
+	Containers  []string `json:"containers"`
 
 	// TODO: add any fields as needed here
 }
@@ -70,9 +70,9 @@ type AwsRdsInstanceDetails struct {
 type Resource struct {
 	ResourceType string `json:"resource_type"`
 
-	AwsEc2InstanceDetails  *AwsEc2InstanceDetails  `json:"aws_ec2_instance_details,omitempty"`
-	AwsEcsContainerDetails *AwsEcsContainerDetails `json:"aws_ecs_container_details,omitempty"`
-	AwsRdsInstanceDetails  *AwsRdsInstanceDetails  `json:"aws_rds_instance_details,omitempty"`
+	AwsEc2InstanceDetails *AwsEc2InstanceDetails `json:"aws_ec2_instance_details,omitempty"`
+	AwsEcsClusterDetails  *AwsEcsClusterDetails  `json:"aws_ecs_cluster_details,omitempty"`
+	AwsRdsInstanceDetails *AwsRdsInstanceDetails `json:"aws_rds_instance_details,omitempty"`
 }
 
 // Discoverer represents an entity capable of discovering resources.
