@@ -12,6 +12,9 @@ type MultipleUpstreamDiscoverer struct {
 	discoverers []discovery.Discoverer
 }
 
+// ensure MultipleUpstreamDiscoverer implements discovery.Discoverer at compile-time.
+var _ discovery.Discoverer = (*MultipleUpstreamDiscoverer)(nil)
+
 // Option is an input option for the MultipleUpstreamDiscoverer constructor.
 type Option func(*MultipleUpstreamDiscoverer)
 
@@ -33,17 +36,32 @@ func NewMultipleUpstreamDiscoverer(opts ...Option) *MultipleUpstreamDiscoverer {
 	return engine
 }
 
-// Discover runs the MultipleUpstreamDiscoverer and closes the given resources
-// channel after a single run of all the underlying discoverers is completed.
-func (mud *MultipleUpstreamDiscoverer) Discover(ctx context.Context, resources chan<- []discovery.Resource) {
+// Discover runs the MultipleUpstreamDiscoverer and closes the channels
+// after a single run of all the underlying discoverers is completed.
+func (mud *MultipleUpstreamDiscoverer) Discover(
+	ctx context.Context,
+	resources chan<- []discovery.Resource,
+	errors chan<- error,
+) {
 	var wg sync.WaitGroup
 	for _, discoverer := range mud.discoverers {
 		wg.Add(1)
-		go func(d discovery.Discoverer) {
-			defer wg.Done()
-			d.Discover(ctx, resources)
-		}(discoverer)
+		go runOne(ctx, discoverer, &wg, resources, errors)
 	}
 	wg.Wait()
+
 	close(resources)
+	close(errors)
+}
+
+// runOne runs a discoverer and signals a wait group when done.
+func runOne(
+	ctx context.Context,
+	discoverer discovery.Discoverer,
+	wg *sync.WaitGroup,
+	resources chan<- []discovery.Resource,
+	errors chan<- error,
+) {
+	defer wg.Done()
+	discoverer.Discover(ctx, resources, errors)
 }

@@ -76,5 +76,5 @@ type Resource struct {
 
 // Discoverer represents an entity capable of discovering resources.
 type Discoverer interface {
-	Discover(context.Context, chan<- []Resource) error
+	Discover(context.Context, chan<- []Resource, chan<- error)
 }
