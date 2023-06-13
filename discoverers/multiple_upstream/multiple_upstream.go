@@ -27,13 +27,13 @@ func WithDiscoverers(discoverers ...discovery.Discoverer) Option {
 
 // NewEngine returns a new engine, initialized with the given options.
 func NewMultipleUpstreamDiscoverer(opts ...Option) *MultipleUpstreamDiscoverer {
-	engine := &MultipleUpstreamDiscoverer{
+	mud := &MultipleUpstreamDiscoverer{
 		discoverers: []discovery.Discoverer{},
 	}
 	for _, opt := range opts {
-		opt(engine)
+		opt(mud)
 	}
-	return engine
+	return mud
 }
 
 // Discover runs the MultipleUpstreamDiscoverer and closes the channels
