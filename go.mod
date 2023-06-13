@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/aws/aws-sdk-go-v2 v1.18.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.99.0
+	github.com/aws/aws-sdk-go-v2/service/rds v1.45.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 )
 

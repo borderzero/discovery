@@ -23,7 +23,7 @@ var _ discovery.Discoverer = (*AwsEc2Discoverer)(nil)
 // AwsEc2DiscovererOption is an input option for the AwsEc2Discoverer constructor.
 type AwsEc2DiscovererOption func(*AwsEc2Discoverer)
 
-// NewEngine returns a new engine, initialized with the given options.
+// NewEngine returns a new AwsEc2Discoverer, initialized with the given options.
 func NewAwsEc2Discoverer(cfg aws.Config, awsAccountId string, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
 	ec2d := &AwsEc2Discoverer{cfg: cfg, awsAccountId: awsAccountId}
 	for _, opt := range opts {
@@ -32,8 +32,7 @@ func NewAwsEc2Discoverer(cfg aws.Config, awsAccountId string, opts ...AwsEc2Disc
 	return ec2d
 }
 
-// Discover runs the MultipleUpstreamDiscoverer and closes the channels
-// after a single run of all the underlying discoverers is completed.
+// Discover runs the AwsEc2Discoverer and closes the channels after a single run.
 func (ec2d *AwsEc2Discoverer) Discover(
 	ctx context.Context,
 	resources chan<- []discovery.Resource,
@@ -74,24 +73,24 @@ func (ec2d *AwsEc2Discoverer) Discover(
 					instanceId,
 				),
 			}
+			ec2InstanceDetails := &discovery.AwsEc2InstanceDetails{
+				AwsBaseDetails:   awsBaseDetails,
+				InstanceId:       aws.ToString(instance.InstanceId),
+				ImageId:          aws.ToString(instance.ImageId),
+				VpcId:            aws.ToString(instance.VpcId),
+				SubnetId:         aws.ToString(instance.SubnetId),
+				PrivateDnsName:   aws.ToString(instance.PrivateDnsName),
+				PrivateIpAddress: aws.ToString(instance.PrivateIpAddress),
+				PublicDnsName:    aws.ToString(instance.PublicDnsName),
+				PublicIpAddress:  aws.ToString(instance.PublicIpAddress),
+				InstanceType:     string(instance.InstanceType),
+			}
 			discoveredResources = append(discoveredResources, discovery.Resource{
-				ResourceType: discovery.ResourceTypeAwsEc2Instance,
-				AwsEc2InstanceDetails: &discovery.AwsEc2InstanceDetails{
-					AwsBaseDetails:   awsBaseDetails,
-					InstanceId:       aws.ToString(instance.InstanceId),
-					ImageId:          aws.ToString(instance.ImageId),
-					VpcId:            aws.ToString(instance.VpcId),
-					SubnetId:         aws.ToString(instance.SubnetId),
-					PrivateDnsName:   aws.ToString(instance.PrivateDnsName),
-					PrivateIpAddress: aws.ToString(instance.PrivateIpAddress),
-					PublicDnsName:    aws.ToString(instance.PublicDnsName),
-					PublicIpAddress:  aws.ToString(instance.PublicIpAddress),
-					InstanceType:     string(instance.InstanceType),
-				},
+				ResourceType:          discovery.ResourceTypeAwsEc2Instance,
+				AwsEc2InstanceDetails: ec2InstanceDetails,
 			})
 		}
 	}
 
 	resources <- discoveredResources
-	return
 }

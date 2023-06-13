@@ -26,7 +26,7 @@ func WithUpstreamDiscoverers(discoverers ...discovery.Discoverer) MultipleUpstre
 	}
 }
 
-// NewEngine returns a new engine, initialized with the given options.
+// NewEngine returns a new MultipleUpstreamDiscoverer, initialized with the given options.
 func NewMultipleUpstreamDiscoverer(opts ...MultipleUpstreamOption) *MultipleUpstreamDiscoverer {
 	mud := &MultipleUpstreamDiscoverer{
 		discoverers: []discovery.Discoverer{},

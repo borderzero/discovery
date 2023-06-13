@@ -57,10 +57,11 @@ type AwsRdsInstanceDetails struct {
 
 	DBInstanceIdentifier string `json:"db_instance_identifier"`
 	Engine               string `json:"engine"`
+	EngineVersion        string `json:"engine_version"`
 	VpcId                string `json:"vpc_id"`
 	DBSubnetGroupName    string `json:"db_subnet_group_name"`
 	EndpointAddress      string `json:"endpoint_address"`
-	EndpointPort         string `json:"endpoint_port"`
+	EndpointPort         int32  `json:"endpoint_port"`
 
 	// TODO: add any fields as needed here
 }
