@@ -1,4 +1,4 @@
-package discoverers
+package engines
 
 import (
 	"context"

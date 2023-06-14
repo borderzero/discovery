@@ -11,32 +11,33 @@ import (
 
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/discoverers"
+	"github.com/borderzero/discovery/engines"
 )
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*12)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
 	defer cancel()
 
-	awsConfigLoadCtx, awsConfigLoadCtxCancel := context.WithTimeout(ctx, time.Second)
-	defer awsConfigLoadCtxCancel()
-
-	cfg, err := config.LoadDefaultConfig(awsConfigLoadCtx)
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %w", err)
 	}
 
-	d := discoverers.NewContinuousDiscoverer(
-		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsEc2Discoverer(cfg), time.Second*5),
-		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsEcsDiscoverer(cfg), time.Second*5),
-		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsRdsDiscoverer(cfg), time.Second*5),
+	engine := engines.NewContinuousEngine(
+		engines.ContinuousEngineOptionWithDiscoverer(discoverers.NewAwsEc2Discoverer(cfg), time.Second*5),
+		engines.ContinuousEngineOptionWithDiscoverer(discoverers.NewAwsEcsDiscoverer(cfg), time.Second*5),
+		engines.ContinuousEngineOptionWithDiscoverer(discoverers.NewAwsRdsDiscoverer(cfg), time.Second*5),
 	)
 
 	results := make(chan *discovery.Result, 10)
 
-	go d.Discover(ctx, results)
+	go engine.Run(ctx, results)
 
 	for result := range results {
-		byt, _ := json.Marshal(result)
+		byt, err := json.Marshal(result)
+		if err != nil {
+			fmt.Println(fmt.Sprintf("[ERROR] failed to json encode result: %w", err))
+		}
 		fmt.Println(string(byt))
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/discoverers"
+	"github.com/borderzero/discovery/engines"
 )
 
 func main() {
@@ -20,8 +21,8 @@ func main() {
 		log.Fatalf("unable to load SDK config, %w", err)
 	}
 
-	d := discoverers.NewMultipleUpstreamDiscoverer(
-		discoverers.WithUpstreamDiscoverers(
+	engine := engines.NewOneOffEngine(
+		engines.OneOffEngineOptionWithDiscoverers(
 			discoverers.NewAwsEc2Discoverer(cfg),
 			discoverers.NewAwsEcsDiscoverer(cfg),
 			discoverers.NewAwsRdsDiscoverer(cfg),
@@ -29,15 +30,14 @@ func main() {
 	)
 
 	results := make(chan *discovery.Result, 10)
-	go d.Discover(ctx, results)
+
+	go engine.Run(ctx, results)
 
 	for result := range results {
-		for _, resource := range result.Resources {
-			byt, err := json.Marshal(resource)
-			if err != nil {
-				fmt.Println(fmt.Sprintf("[ERROR] failed to json encode resource: %w", err))
-			}
-			fmt.Println(string(byt))
+		byt, err := json.Marshal(result)
+		if err != nil {
+			fmt.Println(fmt.Sprintf("[ERROR] failed to json encode result: %w", err))
 		}
+		fmt.Println(string(byt))
 	}
 }
