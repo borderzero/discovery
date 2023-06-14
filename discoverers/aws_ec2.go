@@ -46,19 +46,22 @@ func (ec2d *AwsEc2Discoverer) Discover(
 	}()
 
 	// get caller identity
+	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
+	defer gciCtxCancel()
 	stsClient := sts.NewFromConfig(ec2d.cfg)
-	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Errorf("failed to get caller identity via sts: %w", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to get caller identity via sts: %v", err))
 		return
 	}
 	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
 	// describe ec2 instances
 	ec2Client := ec2.NewFromConfig(ec2d.cfg)
+	// TODO: new context with timeout for describe instances
 	describeInstancesOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Errorf("failed to describe ec2 instances: %w", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to describe ec2 instances: %v", err))
 		return
 	}
 

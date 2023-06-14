@@ -11,7 +11,7 @@ type Metrics struct {
 // Result represents the result of a discoverer
 type Result struct {
 	Resources []Resource `json:"resources"`
-	Errors    []error    `json:"errors"`
+	Errors    []string   `json:"errors"`
 	Metrics   Metrics    `json:"metrics"`
 }
 
@@ -19,7 +19,7 @@ type Result struct {
 func NewResult() *Result {
 	return &Result{
 		Resources: []Resource{},
-		Errors:    []error{},
+		Errors:    []string{},
 		Metrics: Metrics{
 			StartedAt: time.Now(),
 		},

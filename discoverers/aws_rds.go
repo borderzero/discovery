@@ -44,19 +44,22 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 	}()
 
 	// get caller identity
+	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
+	defer gciCtxCancel()
 	stsClient := sts.NewFromConfig(rdsd.cfg)
-	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Errorf("failed to get caller identity via sts: %w", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to get caller identity via sts: %v", err))
 		return
 	}
 	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
 	// describe rds instances
 	rdsClient := rds.NewFromConfig(rdsd.cfg)
+	// TODO: new context with timeout for describe instances
 	describeDBInstancesOutput, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Errorf("failed to describe rds instances: %w", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to describe rds instances: %v", err))
 		return
 	}
 

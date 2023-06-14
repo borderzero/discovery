@@ -45,24 +45,28 @@ func (ecsd *AwsEcsDiscoverer) Discover(
 	}()
 
 	// get caller identity
+	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
+	defer gciCtxCancel()
 	stsClient := sts.NewFromConfig(ecsd.cfg)
-	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Errorf("failed to get caller identity via sts: %w", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to get caller identity via sts: %v", err))
 		return
 	}
 	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
 	// describe ecs clusters
 	ecsClient := ecs.NewFromConfig(ecsd.cfg)
+	// TODO: new context with timeout for list clusters
 	listClustersOutput, err := ecsClient.ListClusters(ctx, &ecs.ListClustersInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Errorf("failed to list ecs clusters: %w", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to list ecs clusters: %v", err))
 		return
 	}
+	// TODO: new context with timeout for describe clusters
 	describeClustersOutput, err := ecsClient.DescribeClusters(ctx, &ecs.DescribeClustersInput{Clusters: listClustersOutput.ClusterArns})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Errorf("failed to list ecs clusters: %w", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to list ecs clusters: %v", err))
 		return
 	}
 
