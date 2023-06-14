@@ -12,27 +12,31 @@ Assume that the following variables are defined as follows:
 
 ```
 ctx := context.Background()
-cfg := config.LoadDefaultConfig(ctx)
+
+cfg, err := config.LoadDefaultConfig(ctx)
+if err != nil {
+	// handle error
+}
 ```
 
 Then,
 
 ```
-// initialize a new multiple upstream discoverer
-discoverer := discoverers.NewMultipleUpstreamDiscoverer(
-	discoverers.WithUpstreamDiscoverers(
+// initialize a new one off engine
+engine := engines.NewOneOffEngine(
+	engines.OneOffEngineOptionWithDiscoverers(
 		discoverers.NewAwsEc2Discoverer(cfg),
 		discoverers.NewAwsEcsDiscoverer(cfg),
 		discoverers.NewAwsRdsDiscoverer(cfg),
-		// ... docker, k8s, LAN, gcp compute, azure vms, etc ...
+		// ... LAN, docker, k8s, gcp compute, azure vms, etc ...
 	),
 )
 
 // create channels for discovery results
 results := make(chan *discovery.Result, 10)
 
-// run discoverer
-go d.Discover(ctx, results)
+// run engine
+go engine.Run(ctx, results)
 
 // process results as they come in
 for result := range results {
@@ -40,36 +44,85 @@ for result := range results {
 }
 ```
 
-### Example: Discover EC2 Instances In Multiple AWS Regions (In Parallel)
+### Example: Continuously Discover EC2, ECS, and RDS Resources
 
 Assume that the following variables are defined as follows:
 
+> Assume that ctx (type `context.Context`) is defined by some upstream code
+
 ```
-ctx := context.Background()
-cfg := config.LoadDefaultConfig(ctx)
-awsRegions := []string{"us-east-1", "us-east-2", "us-west-2", "eu-west-1"}
+cfg, err := config.LoadDefaultConfig(ctx)
+if err != nil {
+	// handle error
+}
 ```
 
 Then,
 
 ```
-// initialize a aws ec2 discoverer per AWS region
-ds := []discovery.Discoverer{}
-for _, region := range awsRegions {
-	cfg.Region = region
-	ds = append(ds, discoverers.NewAwsEc2Discoverer(cfg))
-}
-
-// initialize a new multiple upstream discoverer
-discoverer := discoverers.NewMultipleUpstreamDiscoverer(
-	discoverers.WithUpstreamDiscoverers(ds...),
+// initialize a new continuous engine
+engine := engines.NewContinuousEngine(
+	engines.ContinuousEngineOptionWithDiscoverer(
+		discoverers.NewAwsEc2Discoverer(cfg),
+		time.Minute*1,
+	),
+	engines.ContinuousEngineOptionWithDiscoverer(
+		discoverers.NewAwsEcsDiscoverer(cfg),
+		time.Minute*10,
+	),
+	engines.ContinuousEngineOptionWithDiscoverer(
+		discoverers.NewAwsRdsDiscoverer(cfg),
+		time.Minute*15,
+	),
 )
 
 // create channels for discovery results
 results := make(chan *discovery.Result, 10)
 
-// run discoverer
-go d.Discover(ctx, results)
+// run engine
+go engine.Run(ctx, results)
+
+// process results as they come in
+for result := range results {
+	// ... do something ...
+}
+```
+
+### Example: Discover EC2 Instances In Multiple AWS Regions
+
+Assume that the following variables are defined as follows:
+
+```
+awsRegions := []string{"us-east-1", "us-east-2", "us-west-2", "eu-west-1"}
+
+ctx := context.Background()
+cfg, err := config.LoadDefaultConfig(ctx)
+if err != nil {
+	// handle error
+}
+```
+
+Then,
+
+```
+// define an ec2 discoverer for each region
+ds := []discovery.Discoverer{}
+for _, region := range regions {
+	cfg.Region = region
+
+	ds = append(ds, discoverers.NewAwsEc2Discoverer(cfg))
+}
+
+// initialize a new one off engine with the discoverers
+engine := engines.NewOneOffEngine(
+	engines.OneOffEngineOptionWithDiscoverers(ds...),
+)
+
+// create channels for discovery results
+results := make(chan *discovery.Result, 10)
+
+// run engine
+go engine.Run(ctx, results)
 
 // process results as they come in
 for result := range results {
