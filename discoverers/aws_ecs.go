@@ -39,7 +39,7 @@ func (ecsd *AwsEcsDiscoverer) Discover(
 ) {
 	result := discovery.NewResult()
 	defer func() {
-		result.Metrics.EndedAt = time.Now()
+		result.Done()
 		results <- result
 		close(results)
 	}()

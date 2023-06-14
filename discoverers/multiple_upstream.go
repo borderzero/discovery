@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/borderzero/discovery"
-	"github.com/borderzero/discovery/discoverers/utils"
 )
 
 // MultipleUpstreamDiscoverer represents a discoverer which under-the-hood is multiple discoverers.
@@ -44,17 +43,13 @@ func (mud *MultipleUpstreamDiscoverer) Discover(
 	ctx context.Context,
 	results chan<- *discovery.Result,
 ) {
-	// discover routines are in charge of
-	// closing their channels when done
-	defer func() {
-		close(results)
-	}()
+	defer close(results)
 
 	var wg sync.WaitGroup
 	for _, discoverer := range mud.discoverers {
 		wg.Add(1)
 
-		go utils.RunOneOff(
+		go runOnce(
 			ctx,
 			&wg,
 			discoverer,

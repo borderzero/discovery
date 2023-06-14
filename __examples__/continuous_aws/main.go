@@ -14,17 +14,21 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*12)
+	defer cancel()
 
-	cfg, err := config.LoadDefaultConfig(ctx)
+	awsConfigLoadCtx, awsConfigLoadCtxCancel := context.WithTimeout(ctx, time.Second)
+	defer awsConfigLoadCtxCancel()
+
+	cfg, err := config.LoadDefaultConfig(awsConfigLoadCtx)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %w", err)
 	}
 
 	d := discoverers.NewContinuousDiscoverer(
-		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsEc2Discoverer(cfg), time.Second*2),
-		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsEcsDiscoverer(cfg), time.Second*2),
-		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsRdsDiscoverer(cfg), time.Second*2),
+		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsEc2Discoverer(cfg), time.Second*5),
+		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsEcsDiscoverer(cfg), time.Second*5),
+		discoverers.WithUpstreamDiscoverer(discoverers.NewAwsRdsDiscoverer(cfg), time.Second*5),
 	)
 
 	results := make(chan *discovery.Result, 10)
@@ -32,12 +36,7 @@ func main() {
 	go d.Discover(ctx, results)
 
 	for result := range results {
-		for _, resource := range result.Resources {
-			byt, err := json.Marshal(resource)
-			if err != nil {
-				fmt.Println(fmt.Sprintf("[ERROR] failed to json encode resource: %w", err))
-			}
-			fmt.Println(string(byt))
-		}
+		byt, _ := json.Marshal(result)
+		fmt.Println(string(byt))
 	}
 }

@@ -15,7 +15,8 @@ type Result struct {
 	Metrics   Metrics    `json:"metrics"`
 }
 
-// NewResult returns a newly intialized Result object
+// NewResult returns a new Result object with
+// the StartedAt time set to the current time.
 func NewResult() *Result {
 	return &Result{
 		Resources: []Resource{},
@@ -24,4 +25,9 @@ func NewResult() *Result {
 			StartedAt: time.Now(),
 		},
 	}
+}
+
+// Done sets the EndedAt time in a Result to the current time.
+func (r *Result) Done() {
+	r.Metrics.EndedAt = time.Now()
 }

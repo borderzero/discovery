@@ -40,7 +40,7 @@ func (ec2d *AwsEc2Discoverer) Discover(
 ) {
 	result := discovery.NewResult()
 	defer func() {
-		result.Metrics.EndedAt = time.Now()
+		result.Done()
 		results <- result
 		close(results)
 	}()

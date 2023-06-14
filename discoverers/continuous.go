@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/borderzero/discovery"
-	"github.com/borderzero/discovery/discoverers/utils"
 )
 
 // used to set the config of each discoverer e.g. interval
@@ -56,17 +55,13 @@ func (cd *ContinuousDiscoverer) Discover(
 	ctx context.Context,
 	results chan<- *discovery.Result,
 ) {
-	// discover routines are in charge of
-	// closing their channels when done
-	defer func() {
-		close(results)
-	}()
+	defer close(results)
 
 	var wg sync.WaitGroup
 	for _, discoverer := range cd.discoverers {
 		wg.Add(1)
 
-		go utils.RunContinuously(
+		go runContinuously(
 			ctx,
 			&wg,
 			discoverer.interval,
