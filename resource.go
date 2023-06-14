@@ -22,6 +22,8 @@ type AwsBaseDetails struct {
 type AwsEc2InstanceDetails struct {
 	AwsBaseDetails // extends
 
+	Tags map[string]string `json:"tags"`
+
 	InstanceId       string `json:"instance_id"`
 	ImageId          string `json:"ami_id"`
 	VpcId            string `json:"vpc_id"`
@@ -39,6 +41,8 @@ type AwsEc2InstanceDetails struct {
 type AwsEcsClusterDetails struct {
 	AwsBaseDetails // extends
 
+	Tags map[string]string `json:"tags"`
+
 	ClusterName string   `json:"cluster_name"`
 	Services    []string `json:"services"`
 	Tasks       []string `json:"tasks"`
@@ -50,6 +54,8 @@ type AwsEcsClusterDetails struct {
 // AwsRdsInstanceDetails represents the details of a discovered AWS RDS instance.
 type AwsRdsInstanceDetails struct {
 	AwsBaseDetails // extends
+
+	Tags map[string]string `json:"tags"`
 
 	DBInstanceIdentifier string `json:"db_instance_identifier"`
 	Engine               string `json:"engine"`

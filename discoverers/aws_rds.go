@@ -7,13 +7,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/borderzero/discovery"
 )
 
 // AwsRdsDiscoverer represents a discoverer for AWS RDS resources.
 type AwsRdsDiscoverer struct {
-	cfg          aws.Config
-	awsAccountId string // FIXME: call aws sts get-caller-identity for this
+	cfg aws.Config
 }
 
 // ensure AwsRdsDiscoverer implements discovery.Discoverer at compile-time.
@@ -23,8 +23,8 @@ var _ discovery.Discoverer = (*AwsRdsDiscoverer)(nil)
 type AwsRdsDiscovererOption func(*AwsRdsDiscoverer)
 
 // NewAwsRdsDiscoverer returns a new AwsRdsDiscoverer, initialized with the given options.
-func NewAwsRdsDiscoverer(cfg aws.Config, awsAccountId string, opts ...AwsRdsDiscovererOption) *AwsRdsDiscoverer {
-	rdsd := &AwsRdsDiscoverer{cfg: cfg, awsAccountId: awsAccountId}
+func NewAwsRdsDiscoverer(cfg aws.Config, opts ...AwsRdsDiscovererOption) *AwsRdsDiscoverer {
+	rdsd := &AwsRdsDiscoverer{cfg: cfg}
 	for _, opt := range opts {
 		opt(rdsd)
 	}
@@ -43,6 +43,16 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 		close(results)
 	}()
 
+	// get caller identity
+	stsClient := sts.NewFromConfig(rdsd.cfg)
+	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		result.Errors = append(result.Errors, fmt.Errorf("failed to get caller identity via sts: %w", err))
+		return
+	}
+	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
+
+	// describe rds instances
 	rdsClient := rds.NewFromConfig(rdsd.cfg)
 	describeDBInstancesOutput, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	if err != nil {
@@ -50,6 +60,7 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 		return
 	}
 
+	// filter and build resources
 	for _, instance := range describeDBInstancesOutput.DBInstances {
 		// ignore unavailable instances
 		if instance.DBInstanceStatus == nil || aws.ToString(instance.DBInstanceStatus) != "available" {
@@ -58,11 +69,16 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 		// build resource
 		awsBaseDetails := discovery.AwsBaseDetails{
 			AwsRegion:    rdsd.cfg.Region,
-			AwsAccountId: rdsd.awsAccountId,
+			AwsAccountId: awsAccountId,
 			AwsArn:       aws.ToString(instance.DBInstanceArn),
+		}
+		tags := map[string]string{}
+		for _, t := range instance.TagList {
+			tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
 		}
 		rdsInstanceDetails := &discovery.AwsRdsInstanceDetails{
 			AwsBaseDetails:       awsBaseDetails,
+			Tags:                 tags,
 			DBInstanceIdentifier: aws.ToString(instance.DBInstanceIdentifier),
 			Engine:               aws.ToString(instance.Engine),
 			EngineVersion:        aws.ToString(instance.EngineVersion),

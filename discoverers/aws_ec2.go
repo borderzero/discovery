@@ -8,14 +8,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/borderzero/discovery"
 	"golang.org/x/exp/slices"
 )
 
 // AwsEc2Discoverer represents a discoverer for AWS EC2 resources.
 type AwsEc2Discoverer struct {
-	cfg          aws.Config
-	awsAccountId string // FIXME: call aws sts get-caller-identity for this
+	cfg aws.Config
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
@@ -25,8 +25,8 @@ var _ discovery.Discoverer = (*AwsEc2Discoverer)(nil)
 type AwsEc2DiscovererOption func(*AwsEc2Discoverer)
 
 // NewEngine returns a new AwsEc2Discoverer, initialized with the given options.
-func NewAwsEc2Discoverer(cfg aws.Config, awsAccountId string, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
-	ec2d := &AwsEc2Discoverer{cfg: cfg, awsAccountId: awsAccountId}
+func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
+	ec2d := &AwsEc2Discoverer{cfg: cfg}
 	for _, opt := range opts {
 		opt(ec2d)
 	}
@@ -45,14 +45,24 @@ func (ec2d *AwsEc2Discoverer) Discover(
 		close(results)
 	}()
 
-	ec2Client := ec2.NewFromConfig(ec2d.cfg)
+	// get caller identity
+	stsClient := sts.NewFromConfig(ec2d.cfg)
+	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		result.Errors = append(result.Errors, fmt.Errorf("failed to get caller identity via sts: %w", err))
+		return
+	}
+	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
+	// describe ec2 instances
+	ec2Client := ec2.NewFromConfig(ec2d.cfg)
 	describeInstancesOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{})
 	if err != nil {
 		result.Errors = append(result.Errors, fmt.Errorf("failed to describe ec2 instances: %w", err))
 		return
 	}
 
+	// filter and build resources
 	for _, reservation := range describeInstancesOutput.Reservations {
 		for _, instance := range reservation.Instances {
 			// ignore unavailable instances
@@ -64,16 +74,21 @@ func (ec2d *AwsEc2Discoverer) Discover(
 			instanceId := aws.ToString(instance.InstanceId)
 			awsBaseDetails := discovery.AwsBaseDetails{
 				AwsRegion:    ec2d.cfg.Region,
-				AwsAccountId: ec2d.awsAccountId,
+				AwsAccountId: awsAccountId,
 				AwsArn: fmt.Sprintf(
 					"arn:aws:ec2:%s:%s:instance/%s",
 					ec2d.cfg.Region,
-					ec2d.awsAccountId,
+					awsAccountId,
 					instanceId,
 				),
 			}
+			tags := map[string]string{}
+			for _, t := range instance.Tags {
+				tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
+			}
 			ec2InstanceDetails := &discovery.AwsEc2InstanceDetails{
 				AwsBaseDetails:   awsBaseDetails,
+				Tags:             tags,
 				InstanceId:       aws.ToString(instance.InstanceId),
 				ImageId:          aws.ToString(instance.ImageId),
 				VpcId:            aws.ToString(instance.VpcId),

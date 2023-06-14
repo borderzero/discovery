@@ -7,13 +7,14 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/borderzero/discovery"
+	"golang.org/x/exp/slices"
 )
 
 // AwsEcsDiscoverer represents a discoverer for AWS ECS resources.
 type AwsEcsDiscoverer struct {
-	cfg          aws.Config
-	awsAccountId string // FIXME: call aws sts get-caller-identity for this
+	cfg aws.Config
 }
 
 // ensure AwsEcsDiscoverer implements discovery.Discoverer at compile-time.
@@ -23,8 +24,8 @@ var _ discovery.Discoverer = (*AwsEcsDiscoverer)(nil)
 type AwsEcsDiscovererOption func(*AwsEcsDiscoverer)
 
 // NewAwsEcsDiscoverer returns a new AwsEcsDiscoverer, initialized with the given options.
-func NewAwsEcsDiscoverer(cfg aws.Config, awsAccountId string, opts ...AwsEcsDiscovererOption) *AwsEcsDiscoverer {
-	ecsd := &AwsEcsDiscoverer{cfg: cfg, awsAccountId: awsAccountId}
+func NewAwsEcsDiscoverer(cfg aws.Config, opts ...AwsEcsDiscovererOption) *AwsEcsDiscoverer {
+	ecsd := &AwsEcsDiscoverer{cfg: cfg}
 	for _, opt := range opts {
 		opt(ecsd)
 	}
@@ -43,28 +44,52 @@ func (ecsd *AwsEcsDiscoverer) Discover(
 		close(results)
 	}()
 
-	ecsClient := ecs.NewFromConfig(ecsd.cfg)
+	// get caller identity
+	stsClient := sts.NewFromConfig(ecsd.cfg)
+	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		result.Errors = append(result.Errors, fmt.Errorf("failed to get caller identity via sts: %w", err))
+		return
+	}
+	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
+	// describe ecs clusters
+	ecsClient := ecs.NewFromConfig(ecsd.cfg)
 	listClustersOutput, err := ecsClient.ListClusters(ctx, &ecs.ListClustersInput{})
 	if err != nil {
 		result.Errors = append(result.Errors, fmt.Errorf("failed to list ecs clusters: %w", err))
 		return
 	}
+	describeClustersOutput, err := ecsClient.DescribeClusters(ctx, &ecs.DescribeClustersInput{Clusters: listClustersOutput.ClusterArns})
+	if err != nil {
+		result.Errors = append(result.Errors, fmt.Errorf("failed to list ecs clusters: %w", err))
+		return
+	}
 
-	for _, clusterArn := range listClustersOutput.ClusterArns {
+	// filter and build resources
+	for _, cluster := range describeClustersOutput.Clusters {
+		// ignore unavailable clusters
+		if !slices.Contains([]string{"ACTIVE", "PROVISIONING"}, aws.ToString(cluster.Status)) {
+			continue
+		}
 		// build resource
 		awsBaseDetails := discovery.AwsBaseDetails{
 			AwsRegion:    ecsd.cfg.Region,
-			AwsAccountId: ecsd.awsAccountId,
-			AwsArn:       clusterArn,
+			AwsAccountId: awsAccountId,
+			AwsArn:       aws.ToString(cluster.ClusterArn),
 		}
 		// Note: might need to make a few api calls for each cluster...
-		// - DescribeCluster
 		// - DescribeServices
 		// - DescribeTasks
 		// - DescribeContainerInstances
+		tags := map[string]string{}
+		for _, t := range cluster.Tags {
+			tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
+		}
 		ecsClusterDetails := &discovery.AwsEcsClusterDetails{
 			AwsBaseDetails: awsBaseDetails,
+			Tags:           tags,
+			ClusterName:    aws.ToString(cluster.ClusterName),
 			// TODO: add details
 		}
 		result.Resources = append(result.Resources, discovery.Resource{
