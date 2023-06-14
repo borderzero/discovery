@@ -3,6 +3,7 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
@@ -12,7 +13,7 @@ import (
 // AwsRdsDiscoverer represents a discoverer for AWS RDS resources.
 type AwsRdsDiscoverer struct {
 	cfg          aws.Config
-	awsAccountId string
+	awsAccountId string // FIXME: call aws sts get-caller-identity for this
 }
 
 // ensure AwsRdsDiscoverer implements discovery.Discoverer at compile-time.
@@ -33,24 +34,22 @@ func NewAwsRdsDiscoverer(cfg aws.Config, awsAccountId string, opts ...AwsRdsDisc
 // Discover runs the AwsRdsDiscoverer and closes the channels after a single run.
 func (rdsd *AwsRdsDiscoverer) Discover(
 	ctx context.Context,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
-	// discover routines are in charge of
-	// closing their channels when done
+	result := discovery.NewResult()
 	defer func() {
-		close(resources)
-		close(errors)
+		result.Metrics.EndedAt = time.Now()
+		results <- result
+		close(results)
 	}()
 
 	rdsClient := rds.NewFromConfig(rdsd.cfg)
 	describeDBInstancesOutput, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	if err != nil {
-		errors <- fmt.Errorf("failed to describe rds instances: %w", err)
+		result.Errors = append(result.Errors, fmt.Errorf("failed to describe rds instances: %w", err))
 		return
 	}
 
-	discoveredResources := []discovery.Resource{}
 	for _, instance := range describeDBInstancesOutput.DBInstances {
 		// ignore unavailable instances
 		if instance.DBInstanceStatus == nil || aws.ToString(instance.DBInstanceStatus) != "available" {
@@ -82,11 +81,9 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 			rdsInstanceDetails.EndpointAddress = ""
 			rdsInstanceDetails.EndpointPort = -1
 		}
-		discoveredResources = append(discoveredResources, discovery.Resource{
+		result.Resources = append(result.Resources, discovery.Resource{
 			ResourceType:          discovery.ResourceTypeAwsRdsInstance,
 			AwsRdsInstanceDetails: rdsInstanceDetails,
 		})
 	}
-
-	resources <- discoveredResources
 }

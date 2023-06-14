@@ -15,22 +15,21 @@ func RunContinuously(
 	wg *sync.WaitGroup,
 	interval time.Duration,
 	discoverer discovery.Discoverer,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
 	defer wg.Done()
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	go runOnce(ctx, discoverer, resources, errors)
+	go runOnce(ctx, discoverer, results)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			go runOnce(ctx, discoverer, resources, errors)
+			go runOnce(ctx, discoverer, results)
 		}
 	}
 }
@@ -41,35 +40,24 @@ func RunOneOff(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	discoverer discovery.Discoverer,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
 	defer wg.Done()
-	runOnce(ctx, discoverer, resources, errors)
+	runOnce(ctx, discoverer, results)
 }
 
-// runOnce runs the discoverer just once with locally defined channels.
-// This is useful because the given channels will not be closed by the discoverer.
+// runOnce runs the discoverer just once with a locally defined results channel. This
+// is useful because the channel given to runOnce() will not be closed by the discoverer.
 func runOnce(
 	ctx context.Context,
 	discoverer discovery.Discoverer,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
-	resourcesInner := make(chan []discovery.Resource, len(resources))
-	errorsInner := make(chan error, len(errors))
+	resultsInner := make(chan *discovery.Result, len(results))
 
-	go func() {
-		for resourcesInnerBatch := range resourcesInner {
-			resources <- resourcesInnerBatch
-		}
-	}()
+	go discoverer.Discover(ctx, resultsInner)
 
-	go func() {
-		for errorInner := range errorsInner {
-			errors <- errorInner
-		}
-	}()
-
-	discoverer.Discover(ctx, resourcesInner, errorsInner)
+	for result := range resultsInner {
+		results <- result
+	}
 }

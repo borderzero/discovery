@@ -3,6 +3,7 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
@@ -12,7 +13,7 @@ import (
 // AwsEcsDiscoverer represents a discoverer for AWS ECS resources.
 type AwsEcsDiscoverer struct {
 	cfg          aws.Config
-	awsAccountId string
+	awsAccountId string // FIXME: call aws sts get-caller-identity for this
 }
 
 // ensure AwsEcsDiscoverer implements discovery.Discoverer at compile-time.
@@ -33,25 +34,23 @@ func NewAwsEcsDiscoverer(cfg aws.Config, awsAccountId string, opts ...AwsEcsDisc
 // Discover runs the AwsEcsDiscoverer and closes the channels after a single run.
 func (ecsd *AwsEcsDiscoverer) Discover(
 	ctx context.Context,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
-	// discover routines are in charge of
-	// closing their channels when done
+	result := discovery.NewResult()
 	defer func() {
-		close(resources)
-		close(errors)
+		result.Metrics.EndedAt = time.Now()
+		results <- result
+		close(results)
 	}()
 
 	ecsClient := ecs.NewFromConfig(ecsd.cfg)
 
 	listClustersOutput, err := ecsClient.ListClusters(ctx, &ecs.ListClustersInput{})
 	if err != nil {
-		errors <- fmt.Errorf("failed to list ecs clusters: %w", err)
+		result.Errors = append(result.Errors, fmt.Errorf("failed to list ecs clusters: %w", err))
 		return
 	}
 
-	discoveredResources := []discovery.Resource{}
 	for _, clusterArn := range listClustersOutput.ClusterArns {
 		// build resource
 		awsBaseDetails := discovery.AwsBaseDetails{
@@ -68,11 +67,9 @@ func (ecsd *AwsEcsDiscoverer) Discover(
 			AwsBaseDetails: awsBaseDetails,
 			// TODO: add details
 		}
-		discoveredResources = append(discoveredResources, discovery.Resource{
+		result.Resources = append(result.Resources, discovery.Resource{
 			ResourceType:         discovery.ResourceTypeAwsEcsCluster,
 			AwsEcsClusterDetails: ecsClusterDetails,
 		})
 	}
-
-	resources <- discoveredResources
 }

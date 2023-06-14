@@ -3,6 +3,7 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -14,7 +15,7 @@ import (
 // AwsEc2Discoverer represents a discoverer for AWS EC2 resources.
 type AwsEc2Discoverer struct {
 	cfg          aws.Config
-	awsAccountId string
+	awsAccountId string // FIXME: call aws sts get-caller-identity for this
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
@@ -35,25 +36,23 @@ func NewAwsEc2Discoverer(cfg aws.Config, awsAccountId string, opts ...AwsEc2Disc
 // Discover runs the AwsEc2Discoverer and closes the channels after a single run.
 func (ec2d *AwsEc2Discoverer) Discover(
 	ctx context.Context,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
-	// discover routines are in charge of
-	// closing their channels when done
+	result := discovery.NewResult()
 	defer func() {
-		close(resources)
-		close(errors)
+		result.Metrics.EndedAt = time.Now()
+		results <- result
+		close(results)
 	}()
 
 	ec2Client := ec2.NewFromConfig(ec2d.cfg)
 
 	describeInstancesOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{})
 	if err != nil {
-		errors <- fmt.Errorf("failed to describe ec2 instances: %w", err)
+		result.Errors = append(result.Errors, fmt.Errorf("failed to describe ec2 instances: %w", err))
 		return
 	}
 
-	discoveredResources := []discovery.Resource{}
 	for _, reservation := range describeInstancesOutput.Reservations {
 		for _, instance := range reservation.Instances {
 			// ignore unavailable instances
@@ -85,12 +84,10 @@ func (ec2d *AwsEc2Discoverer) Discover(
 				PublicIpAddress:  aws.ToString(instance.PublicIpAddress),
 				InstanceType:     string(instance.InstanceType),
 			}
-			discoveredResources = append(discoveredResources, discovery.Resource{
+			result.Resources = append(result.Resources, discovery.Resource{
 				ResourceType:          discovery.ResourceTypeAwsEc2Instance,
 				AwsEc2InstanceDetails: ec2InstanceDetails,
 			})
 		}
 	}
-
-	resources <- discoveredResources
 }

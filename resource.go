@@ -1,9 +1,5 @@
 package discovery
 
-import (
-	"context"
-)
-
 const (
 	// ResourceTypeAwsEc2Instance is the resource type for AWS EC2 instances.
 	ResourceTypeAwsEc2Instance = "aws_ec2_instance"
@@ -36,7 +32,7 @@ type AwsEc2InstanceDetails struct {
 	PublicIpAddress  string `json:"public_ip_address"`
 	InstanceType     string `json:"instance_type"`
 
-	// TODO: add any fields as needed here
+	// add any new fields as needed here
 }
 
 // AwsEcsClusterDetails represents the details of a discovered AWS ECS cluster.
@@ -48,7 +44,7 @@ type AwsEcsClusterDetails struct {
 	Tasks       []string `json:"tasks"`
 	Containers  []string `json:"containers"`
 
-	// TODO: add any fields as needed here
+	// add any new fields as needed here
 }
 
 // AwsRdsInstanceDetails represents the details of a discovered AWS RDS instance.
@@ -63,19 +59,16 @@ type AwsRdsInstanceDetails struct {
 	EndpointAddress      string `json:"endpoint_address"`
 	EndpointPort         int32  `json:"endpoint_port"`
 
-	// TODO: add any fields as needed here
+	// add any new fields as needed here
 }
 
-// Resource represents a potential Border0 target.
+// Resource represents a generic discovered resource.
 type Resource struct {
 	ResourceType string `json:"resource_type"`
 
 	AwsEc2InstanceDetails *AwsEc2InstanceDetails `json:"aws_ec2_instance_details,omitempty"`
 	AwsEcsClusterDetails  *AwsEcsClusterDetails  `json:"aws_ecs_cluster_details,omitempty"`
 	AwsRdsInstanceDetails *AwsRdsInstanceDetails `json:"aws_rds_instance_details,omitempty"`
-}
 
-// Discoverer represents an entity capable of discovering resources.
-type Discoverer interface {
-	Discover(context.Context, chan<- []Resource, chan<- error)
+	// add any new resource details here
 }

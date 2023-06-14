@@ -42,14 +42,12 @@ func NewMultipleUpstreamDiscoverer(opts ...MultipleUpstreamOption) *MultipleUpst
 // after a single run of all the underlying discoverers is completed.
 func (mud *MultipleUpstreamDiscoverer) Discover(
 	ctx context.Context,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
 	// discover routines are in charge of
 	// closing their channels when done
 	defer func() {
-		close(resources)
-		close(errors)
+		close(results)
 	}()
 
 	var wg sync.WaitGroup
@@ -60,8 +58,7 @@ func (mud *MultipleUpstreamDiscoverer) Discover(
 			ctx,
 			&wg,
 			discoverer,
-			resources,
-			errors,
+			results,
 		)
 	}
 	wg.Wait()

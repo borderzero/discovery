@@ -54,14 +54,12 @@ func NewContinuousDiscoverer(opts ...ContinuousDiscovererOption) *ContinuousDisc
 // This can only happen if the given context is done.
 func (cd *ContinuousDiscoverer) Discover(
 	ctx context.Context,
-	resources chan<- []discovery.Resource,
-	errors chan<- error,
+	results chan<- *discovery.Result,
 ) {
 	// discover routines are in charge of
 	// closing their channels when done
 	defer func() {
-		close(resources)
-		close(errors)
+		close(results)
 	}()
 
 	var wg sync.WaitGroup
@@ -73,8 +71,7 @@ func (cd *ContinuousDiscoverer) Discover(
 			&wg,
 			discoverer.interval,
 			discoverer.discoverer,
-			resources,
-			errors,
+			results,
 		)
 	}
 	wg.Wait()
