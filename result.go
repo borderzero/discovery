@@ -1,6 +1,9 @@
 package discovery
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 // Metrics represents stats/metrics for a
 type Metrics struct {
@@ -10,6 +13,8 @@ type Metrics struct {
 
 // Result represents the result of a discoverer
 type Result struct {
+	sync.Mutex // inherit lock behaviour
+
 	Resources []Resource `json:"resources"`
 	Errors    []string   `json:"errors"`
 	Metrics   Metrics    `json:"metrics"`
@@ -29,5 +34,24 @@ func NewResult() *Result {
 
 // Done sets the EndedAt time in a Result to the current time.
 func (r *Result) Done() {
+	r.Lock()
+	defer r.Unlock()
+
 	r.Metrics.EndedAt = time.Now()
+}
+
+// AddResource adds a resource to a result
+func (r *Result) AddResource(resource Resource) {
+	r.Lock()
+	defer r.Unlock()
+
+	r.Resources = append(r.Resources, resource)
+}
+
+// AddError adds an error to a result
+func (r *Result) AddError(err error) {
+	r.Lock()
+	defer r.Unlock()
+
+	r.Errors = append(r.Errors, err.Error())
 }

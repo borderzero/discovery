@@ -20,29 +20,15 @@ type AwsEcsDiscoverer struct {
 // ensure AwsEcsDiscoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsEcsDiscoverer)(nil)
 
-// AwsEcsDiscovererOption is an input option for the AwsEcsDiscoverer constructor.
-type AwsEcsDiscovererOption func(*AwsEcsDiscoverer)
-
 // NewAwsEcsDiscoverer returns a new AwsEcsDiscoverer, initialized with the given options.
-func NewAwsEcsDiscoverer(cfg aws.Config, opts ...AwsEcsDiscovererOption) *AwsEcsDiscoverer {
-	ecsd := &AwsEcsDiscoverer{cfg: cfg}
-	for _, opt := range opts {
-		opt(ecsd)
-	}
-	return ecsd
+func NewAwsEcsDiscoverer(cfg aws.Config) *AwsEcsDiscoverer {
+	return &AwsEcsDiscoverer{cfg: cfg}
 }
 
 // Discover runs the AwsEcsDiscoverer and closes the channels after a single run.
-func (ecsd *AwsEcsDiscoverer) Discover(
-	ctx context.Context,
-	results chan<- *discovery.Result,
-) {
+func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	result := discovery.NewResult()
-	defer func() {
-		result.Done()
-		results <- result
-		close(results)
-	}()
+	defer result.Done()
 
 	// get caller identity
 	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
@@ -50,8 +36,8 @@ func (ecsd *AwsEcsDiscoverer) Discover(
 	stsClient := sts.NewFromConfig(ecsd.cfg)
 	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to get caller identity via sts: %v", err))
-		return
+		result.AddError(fmt.Errorf("failed to get caller identity via sts: %w", err))
+		return result
 	}
 	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
@@ -60,14 +46,14 @@ func (ecsd *AwsEcsDiscoverer) Discover(
 	// TODO: new context with timeout for list clusters
 	listClustersOutput, err := ecsClient.ListClusters(ctx, &ecs.ListClustersInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to list ecs clusters: %v", err))
-		return
+		result.AddError(fmt.Errorf("failed to list ecs clusters: %w", err))
+		return result
 	}
 	// TODO: new context with timeout for describe clusters
 	describeClustersOutput, err := ecsClient.DescribeClusters(ctx, &ecs.DescribeClustersInput{Clusters: listClustersOutput.ClusterArns})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to list ecs clusters: %v", err))
-		return
+		result.AddError(fmt.Errorf("failed to describe ecs clusters: %w", err))
+		return result
 	}
 
 	// filter and build resources
@@ -96,9 +82,11 @@ func (ecsd *AwsEcsDiscoverer) Discover(
 			ClusterName:    aws.ToString(cluster.ClusterName),
 			// TODO: add details
 		}
-		result.Resources = append(result.Resources, discovery.Resource{
+		result.AddResource(discovery.Resource{
 			ResourceType:         discovery.ResourceTypeAwsEcsCluster,
 			AwsEcsClusterDetails: ecsClusterDetails,
 		})
 	}
+
+	return result
 }

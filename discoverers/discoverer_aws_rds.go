@@ -19,29 +19,15 @@ type AwsRdsDiscoverer struct {
 // ensure AwsRdsDiscoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsRdsDiscoverer)(nil)
 
-// AwsRdsDiscovererOption is an input option for the AwsRdsDiscoverer constructor.
-type AwsRdsDiscovererOption func(*AwsRdsDiscoverer)
-
 // NewAwsRdsDiscoverer returns a new AwsRdsDiscoverer, initialized with the given options.
-func NewAwsRdsDiscoverer(cfg aws.Config, opts ...AwsRdsDiscovererOption) *AwsRdsDiscoverer {
-	rdsd := &AwsRdsDiscoverer{cfg: cfg}
-	for _, opt := range opts {
-		opt(rdsd)
-	}
-	return rdsd
+func NewAwsRdsDiscoverer(cfg aws.Config) *AwsRdsDiscoverer {
+	return &AwsRdsDiscoverer{cfg: cfg}
 }
 
 // Discover runs the AwsRdsDiscoverer and closes the channels after a single run.
-func (rdsd *AwsRdsDiscoverer) Discover(
-	ctx context.Context,
-	results chan<- *discovery.Result,
-) {
+func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	result := discovery.NewResult()
-	defer func() {
-		result.Done()
-		results <- result
-		close(results)
-	}()
+	defer result.Done()
 
 	// get caller identity
 	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
@@ -49,8 +35,8 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 	stsClient := sts.NewFromConfig(rdsd.cfg)
 	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to get caller identity via sts: %v", err))
-		return
+		result.AddError(fmt.Errorf("failed to get caller identity via sts: %w", err))
+		return result
 	}
 	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
@@ -59,8 +45,8 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 	// TODO: new context with timeout for describe instances
 	describeDBInstancesOutput, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to describe rds instances: %v", err))
-		return
+		result.AddError(fmt.Errorf("failed to describe rds instances: %w", err))
+		return result
 	}
 
 	// filter and build resources
@@ -100,9 +86,11 @@ func (rdsd *AwsRdsDiscoverer) Discover(
 			rdsInstanceDetails.EndpointAddress = ""
 			rdsInstanceDetails.EndpointPort = -1
 		}
-		result.Resources = append(result.Resources, discovery.Resource{
+		result.AddResource(discovery.Resource{
 			ResourceType:          discovery.ResourceTypeAwsRdsInstance,
 			AwsRdsInstanceDetails: rdsInstanceDetails,
 		})
 	}
+
+	return result
 }

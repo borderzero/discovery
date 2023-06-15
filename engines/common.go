@@ -50,12 +50,5 @@ func runOnce(
 	results chan<- *discovery.Result,
 ) {
 	defer wg.Done()
-
-	resultsInner := make(chan *discovery.Result, cap(results))
-
-	go discoverer.Discover(ctx, resultsInner)
-
-	for result := range resultsInner {
-		results <- result
-	}
+	results <- discoverer.Discover(ctx)
 }

@@ -21,29 +21,15 @@ type AwsEc2Discoverer struct {
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsEc2Discoverer)(nil)
 
-// AwsEc2DiscovererOption is an input option for the AwsEc2Discoverer constructor.
-type AwsEc2DiscovererOption func(*AwsEc2Discoverer)
-
 // NewEngine returns a new AwsEc2Discoverer, initialized with the given options.
-func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
-	ec2d := &AwsEc2Discoverer{cfg: cfg}
-	for _, opt := range opts {
-		opt(ec2d)
-	}
-	return ec2d
+func NewAwsEc2Discoverer(cfg aws.Config) *AwsEc2Discoverer {
+	return &AwsEc2Discoverer{cfg: cfg}
 }
 
 // Discover runs the AwsEc2Discoverer and closes the channels after a single run.
-func (ec2d *AwsEc2Discoverer) Discover(
-	ctx context.Context,
-	results chan<- *discovery.Result,
-) {
+func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	result := discovery.NewResult()
-	defer func() {
-		result.Done()
-		results <- result
-		close(results)
-	}()
+	defer result.Done()
 
 	// get caller identity
 	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
@@ -51,8 +37,8 @@ func (ec2d *AwsEc2Discoverer) Discover(
 	stsClient := sts.NewFromConfig(ec2d.cfg)
 	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to get caller identity via sts: %v", err))
-		return
+		result.AddError(fmt.Errorf("failed to get caller identity via sts: %w", err))
+		return result
 	}
 	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
@@ -61,8 +47,8 @@ func (ec2d *AwsEc2Discoverer) Discover(
 	// TODO: new context with timeout for describe instances
 	describeInstancesOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{})
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("failed to describe ec2 instances: %v", err))
-		return
+		result.AddError(fmt.Errorf("failed to describe ec2 instances: %w", err))
+		return result
 	}
 
 	// filter and build resources
@@ -102,10 +88,12 @@ func (ec2d *AwsEc2Discoverer) Discover(
 				PublicIpAddress:  aws.ToString(instance.PublicIpAddress),
 				InstanceType:     string(instance.InstanceType),
 			}
-			result.Resources = append(result.Resources, discovery.Resource{
+			result.AddResource(discovery.Resource{
 				ResourceType:          discovery.ResourceTypeAwsEc2Instance,
 				AwsEc2InstanceDetails: ec2InstanceDetails,
 			})
 		}
 	}
+
+	return result
 }
