@@ -8,22 +8,54 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/borderzero/discovery"
-	"golang.org/x/exp/slices"
+	"github.com/borderzero/discovery/lib/types/slice"
 )
+
+const (
+	defaultEc2DescribeInstancesTimeout = time.Second * 5
+)
+
+var (
+	defaultIncludedEc2InstanceStates = []types.InstanceStateName{
+		types.InstanceStateNameRunning,
+		types.InstanceStateNamePending,
+	}
+)
+
+// AwsEc2Client represents an entity capable of acting as the aws ec2 API client.
+type AwsEc2Client interface {
+	DescribeInstances(context.Context, *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error)
+}
 
 // AwsEc2Discoverer represents a discoverer for AWS EC2 resources.
 type AwsEc2Discoverer struct {
-	cfg aws.Config
+	awsEc2Client AwsEc2Client
+
+	resourceLabelAwsRegion    string
+	resourceLabelAwsAccountId string
+
+	describeInstancesTimeout time.Duration
+
+	includeInstanceStates []types.InstanceStateName
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsEc2Discoverer)(nil)
 
 // NewEngine returns a new AwsEc2Discoverer, initialized with the given options.
-func NewAwsEc2Discoverer(cfg aws.Config) *AwsEc2Discoverer {
-	return &AwsEc2Discoverer{cfg: cfg}
+func NewAwsEc2Discoverer(
+	awsEc2Client AwsEc2Client,
+	resourceLabelAwsRegion string,
+	resourceLabelAwsAccountId string,
+) *AwsEc2Discoverer {
+	return &AwsEc2Discoverer{
+		awsEc2Client:              awsEc2Client,
+		resourceLabelAwsRegion:    resourceLabelAwsRegion,
+		resourceLabelAwsAccountId: resourceLabelAwsAccountId,
+		describeInstancesTimeout:  defaultEc2DescribeInstancesTimeout,
+		includeInstanceStates:     defaultIncludedEc2InstanceStates,
+	}
 }
 
 // Discover runs the AwsEc2Discoverer and closes the channels after a single run.
@@ -31,21 +63,13 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	result := discovery.NewResult()
 	defer result.Done()
 
-	// get caller identity
-	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
-	defer gciCtxCancel()
-	stsClient := sts.NewFromConfig(ec2d.cfg)
-	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		result.AddError(fmt.Errorf("failed to get caller identity via sts: %w", err))
-		return result
-	}
-	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
-
 	// describe ec2 instances
-	ec2Client := ec2.NewFromConfig(ec2d.cfg)
-	// TODO: new context with timeout for describe instances
-	describeInstancesOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{})
+	describeInstancesCtx, describeInstancesCtxCancel := context.WithTimeout(ctx, ec2d.describeInstancesTimeout)
+	defer describeInstancesCtxCancel()
+	describeInstancesOutput, err := ec2d.awsEc2Client.DescribeInstances(
+		describeInstancesCtx,
+		&ec2.DescribeInstancesInput{},
+	)
 	if err != nil {
 		result.AddError(fmt.Errorf("failed to describe ec2 instances: %w", err))
 		return result
@@ -55,19 +79,18 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	for _, reservation := range describeInstancesOutput.Reservations {
 		for _, instance := range reservation.Instances {
 			// ignore unavailable instances
-			if instance.State == nil ||
-				!slices.Contains([]types.InstanceStateName{types.InstanceStateNameRunning, types.InstanceStateNamePending}, instance.State.Name) {
+			if instance.State == nil || !slice.Contains(ec2d.includeInstanceStates, instance.State.Name) {
 				continue
 			}
 			// build resource
 			instanceId := aws.ToString(instance.InstanceId)
 			awsBaseDetails := discovery.AwsBaseDetails{
-				AwsRegion:    ec2d.cfg.Region,
-				AwsAccountId: awsAccountId,
+				AwsRegion:    ec2d.resourceLabelAwsRegion,
+				AwsAccountId: ec2d.resourceLabelAwsAccountId,
 				AwsArn: fmt.Sprintf(
 					"arn:aws:ec2:%s:%s:instance/%s",
-					ec2d.cfg.Region,
-					awsAccountId,
+					ec2d.resourceLabelAwsRegion,
+					ec2d.resourceLabelAwsAccountId,
 					instanceId,
 				),
 			}

@@ -6,22 +6,40 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/borderzero/discovery"
+	"github.com/borderzero/discovery/lib/types/slice"
 )
+
+const defaultRdsDescribeDBInstancesTimeout = time.Second * 5
+
+var defaultIncludedRdsDBInstanceStatuses = []string{"available"}
+
+// AwsRdsClient represents an entity capable of acting as the aws rds API client.
+type AwsRdsClient interface {
+	DescribeDBInstances(context.Context, *rds.DescribeDBInstancesInput) (*rds.DescribeDBInstancesOutput, error)
+}
 
 // AwsRdsDiscoverer represents a discoverer for AWS RDS resources.
 type AwsRdsDiscoverer struct {
-	cfg aws.Config
+	awsRdsClient AwsRdsClient
+
+	describeDBInstancesTimeout time.Duration
+
+	includeDBInstanceStatuses []string
 }
 
 // ensure AwsRdsDiscoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsRdsDiscoverer)(nil)
 
 // NewAwsRdsDiscoverer returns a new AwsRdsDiscoverer, initialized with the given options.
-func NewAwsRdsDiscoverer(cfg aws.Config) *AwsRdsDiscoverer {
-	return &AwsRdsDiscoverer{cfg: cfg}
+func NewAwsRdsDiscoverer(awsRdsClient AwsRdsClient) *AwsRdsDiscoverer {
+	return &AwsRdsDiscoverer{
+		awsRdsClient:               awsRdsClient,
+		describeDBInstancesTimeout: defaultRdsDescribeDBInstancesTimeout,
+		includeDBInstanceStatuses:  defaultIncludedRdsDBInstanceStatuses,
+	}
 }
 
 // Discover runs the AwsRdsDiscoverer and closes the channels after a single run.
@@ -29,37 +47,36 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	result := discovery.NewResult()
 	defer result.Done()
 
-	// get caller identity
-	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
-	defer gciCtxCancel()
-	stsClient := sts.NewFromConfig(rdsd.cfg)
-	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		result.AddError(fmt.Errorf("failed to get caller identity via sts: %w", err))
-		return result
-	}
-	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
-
 	// describe rds instances
-	rdsClient := rds.NewFromConfig(rdsd.cfg)
-	// TODO: new context with timeout for describe instances
-	describeDBInstancesOutput, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
+	describeDBInstancesCtx, describeDBInstancesCtxCancel := context.WithTimeout(ctx, rdsd.describeDBInstancesTimeout)
+	defer describeDBInstancesCtxCancel()
+	describeDBInstancesOutput, err := rdsd.awsRdsClient.DescribeDBInstances(
+		describeDBInstancesCtx,
+		&rds.DescribeDBInstancesInput{},
+	)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to describe rds instances: %w", err))
+		result.AddError(fmt.Errorf("failed to list ecs clusters: %w", err))
 		return result
 	}
 
 	// filter and build resources
 	for _, instance := range describeDBInstancesOutput.DBInstances {
 		// ignore unavailable instances
-		if instance.DBInstanceStatus == nil || aws.ToString(instance.DBInstanceStatus) != "available" {
+		if !slice.Contains(rdsd.includeDBInstanceStatuses, aws.ToString(instance.DBInstanceStatus)) {
+			continue
+		}
+		// parse arn
+		dbInstanceArnString := aws.ToString(instance.DBInstanceArn)
+		dbInstanceArn, err := arn.Parse(dbInstanceArnString)
+		if err != nil {
+			result.AddError(fmt.Errorf("got an invalid rds db instance arn \"%s\"", dbInstanceArnString))
 			continue
 		}
 		// build resource
 		awsBaseDetails := discovery.AwsBaseDetails{
-			AwsRegion:    rdsd.cfg.Region,
-			AwsAccountId: awsAccountId,
-			AwsArn:       aws.ToString(instance.DBInstanceArn),
+			AwsRegion:    dbInstanceArn.Region,
+			AwsAccountId: dbInstanceArn.AccountID,
+			AwsArn:       dbInstanceArnString,
 		}
 		tags := map[string]string{}
 		for _, t := range instance.TagList {
