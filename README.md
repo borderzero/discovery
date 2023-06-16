@@ -62,17 +62,17 @@ Then,
 ```
 // initialize a new continuous engine
 engine := engines.NewContinuousEngine(
-	engines.ContinuousEngineOptionWithDiscoverer(
+	engines.WithDiscoverer(
 		discoverers.NewAwsEc2Discoverer(cfg),
-		time.Minute*1,
+		engines.WithInitialInterval(time.Second*2),
 	),
-	engines.ContinuousEngineOptionWithDiscoverer(
+	engines.WithDiscoverer(
 		discoverers.NewAwsEcsDiscoverer(cfg),
-		time.Minute*10,
+		engines.WithInitialInterval(time.Second*2),
 	),
-	engines.ContinuousEngineOptionWithDiscoverer(
+	engines.WithDiscoverer(
 		discoverers.NewAwsRdsDiscoverer(cfg),
-		time.Minute*15,
+		engines.WithInitialInterval(time.Second*2),
 	),
 )
 

@@ -15,6 +15,8 @@ func runContinuously(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	interval time.Duration,
+	intervalC <-chan time.Duration,
+	triggerC <-chan struct{},
 	discoverer discovery.Discoverer,
 	results chan<- *discovery.Result,
 ) {
@@ -31,8 +33,22 @@ func runContinuously(
 
 	for {
 		select {
+		// handle context being done
 		case <-ctx.Done():
 			return
+		// handle receiving an interval update
+		case newInterval, ok := <-intervalC:
+			if ok {
+				interval = newInterval
+				ticker.Reset(interval)
+			}
+		// handle receiving a manual run trigger
+		case _, ok := <-triggerC:
+			if ok {
+				ticker.Reset(interval)
+				go runOnce(ctx, &innerWg, discoverer, results)
+			}
+		// handle tick from ticker (run now)
 		case <-ticker.C:
 			innerWg.Add(1)
 			go runOnce(ctx, &innerWg, discoverer, results)

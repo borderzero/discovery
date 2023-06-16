@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*30)
 	defer cancel()
 
 	cfg, err := config.LoadDefaultConfig(ctx)
@@ -24,9 +24,18 @@ func main() {
 	}
 
 	engine := engines.NewContinuousEngine(
-		engines.ContinuousEngineOptionWithDiscoverer(discoverers.NewAwsEc2Discoverer(cfg), time.Second*5),
-		engines.ContinuousEngineOptionWithDiscoverer(discoverers.NewAwsEcsDiscoverer(cfg), time.Second*5),
-		engines.ContinuousEngineOptionWithDiscoverer(discoverers.NewAwsRdsDiscoverer(cfg), time.Second*5),
+		engines.WithDiscoverer(
+			discoverers.NewAwsEc2Discoverer(cfg),
+			engines.WithInitialInterval(time.Second*2),
+		),
+		engines.WithDiscoverer(
+			discoverers.NewAwsEcsDiscoverer(cfg),
+			engines.WithInitialInterval(time.Second*2),
+		),
+		engines.WithDiscoverer(
+			discoverers.NewAwsRdsDiscoverer(cfg),
+			engines.WithInitialInterval(time.Second*2),
+		),
 	)
 
 	results := make(chan *discovery.Result, 10)
