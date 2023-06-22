@@ -26,6 +26,7 @@ func main() {
 			discoverers.NewAwsEc2Discoverer(cfg),
 			discoverers.NewAwsEcsDiscoverer(cfg),
 			discoverers.NewAwsRdsDiscoverer(cfg),
+			discoverers.NewAwsSsmDiscoverer(cfg),
 		),
 	)
 

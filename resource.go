@@ -9,6 +9,15 @@ const (
 
 	// ResourceTypeAwsRdsInstnace is the resource type for AWS RDS instances.
 	ResourceTypeAwsRdsInstance = "aws_rds_instance"
+
+	// ResourceTypeAwsSsmTarget is the resource type for AWS SSM targets.
+	ResourceTypeAwsSsmTarget = "aws_ssm_target"
+
+	// ResourceTypeNetworkSshServer is the resource type for network-reachable SSH servers.
+	ResourceTypeNetworkSshServer = "network_ssh_server"
+
+	// ResourceTypeNetworkHttpServer is the resource type for network-reachable HTTP servers.
+	ResourceTypeNetworkHttpServer = "network_http_server"
 )
 
 // AwsBaseDetails represents the details of a discovered generic AWS resource.
@@ -68,6 +77,15 @@ type AwsRdsInstanceDetails struct {
 	// add any new fields as needed here
 }
 
+// AwsSsmTargetDetails represents the details of a discovered AWS SSM target.
+type AwsSsmTargetDetails struct {
+	AwsBaseDetails // extends
+
+	InstanceId string `json:"instance_id"`
+
+	// add any new fields as needed here
+}
+
 // Resource represents a generic discovered resource.
 type Resource struct {
 	ResourceType string `json:"resource_type"`
@@ -75,6 +93,7 @@ type Resource struct {
 	AwsEc2InstanceDetails *AwsEc2InstanceDetails `json:"aws_ec2_instance_details,omitempty"`
 	AwsEcsClusterDetails  *AwsEcsClusterDetails  `json:"aws_ecs_cluster_details,omitempty"`
 	AwsRdsInstanceDetails *AwsRdsInstanceDetails `json:"aws_rds_instance_details,omitempty"`
+	AwsSsmTargetDetails   *AwsSsmTargetDetails   `json:"aws_ssm_target_details,omitempty"`
 
 	// add any new resource details here
 }
