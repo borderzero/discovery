@@ -7,38 +7,68 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/borderzero/discovery"
+	"github.com/borderzero/discovery/utils"
+)
+
+const (
+	defaultAwsRdsDiscovererDiscovererId        = "aws_rds_discoverer"
+	defaultAwsRdsDiscovererGetAccountIdTimeout = time.Second * 10
 )
 
 // AwsRdsDiscoverer represents a discoverer for AWS RDS resources.
 type AwsRdsDiscoverer struct {
 	cfg aws.Config
+
+	discovererId        string
+	getAccountIdTimeout time.Duration
 }
 
 // ensure AwsRdsDiscoverer implements discovery.Discoverer at compile-time.
 var _ discovery.Discoverer = (*AwsRdsDiscoverer)(nil)
 
-// NewAwsRdsDiscoverer returns a new AwsRdsDiscoverer, initialized with the given options.
-func NewAwsRdsDiscoverer(cfg aws.Config) *AwsRdsDiscoverer {
-	return &AwsRdsDiscoverer{cfg: cfg}
+// AwsRdsDiscovererOption represents a configuration option for an AwsRdsDiscoverer.
+type AwsRdsDiscovererOption func(*AwsRdsDiscoverer)
+
+// WithAwsEcsDiscovererDiscovererId is the AwsRdsDiscovererOption to set a non default discoverer id.
+func WithAwsRdsDiscovererDiscovererId(discovererId string) AwsRdsDiscovererOption {
+	return func(rdsd *AwsRdsDiscoverer) {
+		rdsd.discovererId = discovererId
+	}
 }
 
-// Discover runs the AwsRdsDiscoverer and closes the channels after a single run.
+// WithAwsRdsDiscovererGetAccountIdTimeout is the AwsRdsDiscovererOption
+// to set a non default timeout for getting the aws account id.
+func WithAwsRdsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsRdsDiscovererOption {
+	return func(rdsd *AwsRdsDiscoverer) {
+		rdsd.getAccountIdTimeout = timeout
+	}
+}
+
+// NewAwsRdsDiscoverer returns a new AwsRdsDiscoverer, initialized with the given options.
+func NewAwsRdsDiscoverer(cfg aws.Config, opts ...AwsRdsDiscovererOption) *AwsRdsDiscoverer {
+	rdsd := &AwsRdsDiscoverer{
+		cfg: cfg,
+
+		discovererId:        defaultAwsRdsDiscovererDiscovererId,
+		getAccountIdTimeout: defaultAwsRdsDiscovererGetAccountIdTimeout,
+	}
+	for _, opt := range opts {
+		opt(rdsd)
+	}
+	return rdsd
+}
+
+// Discover runs the AwsRdsDiscoverer.
 func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
-	result := discovery.NewResult()
+	result := discovery.NewResult(rdsd.discovererId)
 	defer result.Done()
 
-	// get caller identity
-	gciCtx, gciCtxCancel := context.WithTimeout(ctx, time.Second*2)
-	defer gciCtxCancel()
-	stsClient := sts.NewFromConfig(rdsd.cfg)
-	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(gciCtx, &sts.GetCallerIdentityInput{})
+	awsAccountId, err := utils.AwsAccountIdFromConfig(ctx, rdsd.cfg, rdsd.getAccountIdTimeout)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to get caller identity via sts: %w", err))
+		result.AddError(fmt.Errorf("failed to get AWS account ID from AWS configuration: %w", err))
 		return result
 	}
-	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
 
 	// describe rds instances
 	rdsClient := rds.NewFromConfig(rdsd.cfg)
@@ -86,7 +116,7 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			rdsInstanceDetails.EndpointAddress = ""
 			rdsInstanceDetails.EndpointPort = -1
 		}
-		result.AddResource(discovery.Resource{
+		result.AddResources(discovery.Resource{
 			ResourceType:          discovery.ResourceTypeAwsRdsInstance,
 			AwsRdsInstanceDetails: rdsInstanceDetails,
 		})

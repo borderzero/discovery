@@ -5,29 +5,31 @@ import (
 	"time"
 )
 
-// Metrics represents stats/metrics for a
-type Metrics struct {
-	StartedAt time.Time `json:"started_at"`
-	EndedAt   time.Time `json:"ended_at"`
+// Metadata represents metadata for a result.
+type Metadata struct {
+	DiscovererId string    `json:"discoverer_id"`
+	StartedAt    time.Time `json:"started_at"`
+	EndedAt      time.Time `json:"ended_at"`
 }
 
-// Result represents the result of a discoverer
+// Result represents the result of a discoverer.
 type Result struct {
 	sync.Mutex // inherit lock behaviour
 
 	Resources []Resource `json:"resources"`
 	Errors    []string   `json:"errors"`
-	Metrics   Metrics    `json:"metrics"`
+	Metadata  Metadata   `json:"metadata"`
 }
 
 // NewResult returns a new Result object with
 // the StartedAt time set to the current time.
-func NewResult() *Result {
+func NewResult(discovererId string) *Result {
 	return &Result{
 		Resources: []Resource{},
 		Errors:    []string{},
-		Metrics: Metrics{
-			StartedAt: time.Now(),
+		Metadata: Metadata{
+			DiscovererId: discovererId,
+			StartedAt:    time.Now(),
 		},
 	}
 }
@@ -37,15 +39,15 @@ func (r *Result) Done() {
 	r.Lock()
 	defer r.Unlock()
 
-	r.Metrics.EndedAt = time.Now()
+	r.Metadata.EndedAt = time.Now()
 }
 
-// AddResource adds a resource to a result
-func (r *Result) AddResource(resource Resource) {
+// AddResources adds resources to a result
+func (r *Result) AddResources(resources ...Resource) {
 	r.Lock()
 	defer r.Unlock()
 
-	r.Resources = append(r.Resources, resource)
+	r.Resources = append(r.Resources, resources...)
 }
 
 // AddError adds an error to a result
