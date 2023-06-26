@@ -13,6 +13,9 @@ const (
 	// ResourceTypeAwsSsmTarget is the resource type for AWS SSM targets.
 	ResourceTypeAwsSsmTarget = "aws_ssm_target"
 
+	// ResourceTypeLocalDockerContainer is the resource type for containers managed by the local Docker daemon.
+	ResourceTypeLocalDockerContainer = "local_docker_container"
+
 	// ResourceTypeNetworkHttpServer is the resource type for network-reachable HTTP servers.
 	ResourceTypeNetworkHttpServer = "network_http_server"
 
@@ -102,6 +105,19 @@ type AwsSsmTargetDetails struct {
 	// add any new fields as needed here
 }
 
+// LocalDockerContainerDetails represents the details of a
+// discovered container managed by the local Docker daemon.
+type LocalDockerContainerDetails struct {
+	ContainerId  string            `json:"container_id"`
+	Status       string            `json:"status"`
+	Image        string            `json:"image"`
+	Names        []string          `json:"names"`
+	PortBindings map[string]string `json:"port_bindings"`
+	Labels       map[string]string `json:"labels"`
+
+	// add any new fields as needed here
+}
+
 // NetworkHttpServerDetails represents the details
 // of a discovered HTTP server on the network.
 type NetworkHttpServerDetails struct {
@@ -150,6 +166,7 @@ type Resource struct {
 	AwsEcsClusterDetails           *AwsEcsClusterDetails           `json:"aws_ecs_cluster_details,omitempty"`
 	AwsRdsInstanceDetails          *AwsRdsInstanceDetails          `json:"aws_rds_instance_details,omitempty"`
 	AwsSsmTargetDetails            *AwsSsmTargetDetails            `json:"aws_ssm_target_details,omitempty"`
+	LocalDockerContainerDetails    *LocalDockerContainerDetails    `json:"local_docker_container_details,omitempty"`
 	NetworkHttpServerDetails       *NetworkHttpServerDetails       `json:"network_http_server_details,omitempty"`
 	NetworkHttpsServerDetails      *NetworkHttpsServerDetails      `json:"network_https_server_details,omitempty"`
 	NetworkMysqlServerDetails      *NetworkMysqlServerDetails      `json:"network_mysql_server_details,omitempty"`
