@@ -13,11 +13,20 @@ const (
 	// ResourceTypeAwsSsmTarget is the resource type for AWS SSM targets.
 	ResourceTypeAwsSsmTarget = "aws_ssm_target"
 
-	// ResourceTypeNetworkSshServer is the resource type for network-reachable SSH servers.
-	ResourceTypeNetworkSshServer = "network_ssh_server"
-
 	// ResourceTypeNetworkHttpServer is the resource type for network-reachable HTTP servers.
 	ResourceTypeNetworkHttpServer = "network_http_server"
+
+	// ResourceTypeNetworkHttpsServer is the resource type for network-reachable HTTPS servers.
+	ResourceTypeNetworkHttpsServer = "network_https_server"
+
+	// ResourceTypeNetworkMysqlServer is the resource type for network-reachable MySQL servers.
+	ResourceTypeNetworkMysqlServer = "network_mysql_server"
+
+	// ResourceTypeNetworkPostgresqlServer is the resource type for network-reachable PostgreSQL servers.
+	ResourceTypeNetworkPostgresqlServer = "network_postgresql_server"
+
+	// ResourceTypeNetworkSshServer is the resource type for network-reachable SSH servers.
+	ResourceTypeNetworkSshServer = "network_ssh_server"
 )
 
 // AwsBaseDetails represents the details of a discovered generic AWS resource.
@@ -25,6 +34,13 @@ type AwsBaseDetails struct {
 	AwsAccountId string `json:"aws_account_id"`
 	AwsRegion    string `json:"aws_region"`
 	AwsArn       string `json:"aws_arn"`
+}
+
+// NetworkBaseDetails represents the details of a discovered generic service on the network.
+type NetworkBaseDetails struct {
+	Addresses []string `json:"addresses"`
+	HostNames []string `json:"hostnames,omitempty"`
+	Port      string   `json:"port"`
 }
 
 // AwsEc2InstanceDetails represents the details of a discovered AWS EC2 instance.
@@ -86,14 +102,59 @@ type AwsSsmTargetDetails struct {
 	// add any new fields as needed here
 }
 
+// NetworkHttpServerDetails represents the details
+// of a discovered HTTP server on the network.
+type NetworkHttpServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
+// NetworkHttpsServerDetails represents the details
+// of a discovered HTTPS server on the network.
+type NetworkHttpsServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
+// NetworkMysqlServerDetails represents the details
+// of a discovered MySQL server on the network.
+type NetworkMysqlServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
+// NetworkPostgresqlServerDetails represents the details
+// of a discovered PostgreSQL server on the network.
+type NetworkPostgresqlServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
+// NetworkSshServerDetails represents the details
+// of a discovered SSH server on the network.
+type NetworkSshServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
 // Resource represents a generic discovered resource.
 type Resource struct {
 	ResourceType string `json:"resource_type"`
 
-	AwsEc2InstanceDetails *AwsEc2InstanceDetails `json:"aws_ec2_instance_details,omitempty"`
-	AwsEcsClusterDetails  *AwsEcsClusterDetails  `json:"aws_ecs_cluster_details,omitempty"`
-	AwsRdsInstanceDetails *AwsRdsInstanceDetails `json:"aws_rds_instance_details,omitempty"`
-	AwsSsmTargetDetails   *AwsSsmTargetDetails   `json:"aws_ssm_target_details,omitempty"`
+	AwsEc2InstanceDetails          *AwsEc2InstanceDetails          `json:"aws_ec2_instance_details,omitempty"`
+	AwsEcsClusterDetails           *AwsEcsClusterDetails           `json:"aws_ecs_cluster_details,omitempty"`
+	AwsRdsInstanceDetails          *AwsRdsInstanceDetails          `json:"aws_rds_instance_details,omitempty"`
+	AwsSsmTargetDetails            *AwsSsmTargetDetails            `json:"aws_ssm_target_details,omitempty"`
+	NetworkHttpServerDetails       *NetworkHttpServerDetails       `json:"network_http_server_details,omitempty"`
+	NetworkHttpsServerDetails      *NetworkHttpsServerDetails      `json:"network_https_server_details,omitempty"`
+	NetworkMysqlServerDetails      *NetworkMysqlServerDetails      `json:"network_mysql_server_details,omitempty"`
+	NetworkPostgresqlServerDetails *NetworkPostgresqlServerDetails `json:"network_postgresql_server_details,omitempty"`
+	NetworkSshServerDetails        *NetworkSshServerDetails        `json:"network_ssh_server_details,omitempty"`
 
 	// add any new resource details here
 }
