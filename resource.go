@@ -13,6 +13,9 @@ const (
 	// ResourceTypeAwsSsmTarget is the resource type for AWS SSM targets.
 	ResourceTypeAwsSsmTarget = "aws_ssm_target"
 
+	// ResourceTypeKubernetesPod is the resource type for kubernetes pods.
+	ResourceTypeKubernetesPod = "kubernetes_pod"
+
 	// ResourceTypeLocalDockerContainer is the resource type for containers managed by the local Docker daemon.
 	ResourceTypeLocalDockerContainer = "local_docker_container"
 
@@ -105,6 +108,28 @@ type AwsSsmTargetDetails struct {
 	// add any new fields as needed here
 }
 
+// KubernetesContainerDetails represents the details of a discovered kubernetes container.
+type KubernetesContainerDetails struct {
+	Name  string `json:"name"`
+	Image string `json:"image"`
+
+	// add any new fields as needed here
+}
+
+// KubernetesPodDetails represents the details of a discovered kubernetes pod.
+type KubernetesPodDetails struct {
+	Namespace   string                       `json:"namespace"`
+	PodName     string                       `json:"pod_name"`
+	PodIP       string                       `json:"pod_ip"`
+	NodeName    string                       `json:"node_name"`
+	Status      string                       `json:"status"`
+	Containers  []KubernetesContainerDetails `json:"containers"`
+	Labels      map[string]string            `json:"labels"`
+	Annotations map[string]string            `json:"annotations"`
+
+	// add any new fields as needed here
+}
+
 // LocalDockerContainerDetails represents the details of a
 // discovered container managed by the local Docker daemon.
 type LocalDockerContainerDetails struct {
@@ -166,6 +191,7 @@ type Resource struct {
 	AwsEcsClusterDetails           *AwsEcsClusterDetails           `json:"aws_ecs_cluster_details,omitempty"`
 	AwsRdsInstanceDetails          *AwsRdsInstanceDetails          `json:"aws_rds_instance_details,omitempty"`
 	AwsSsmTargetDetails            *AwsSsmTargetDetails            `json:"aws_ssm_target_details,omitempty"`
+	KubernetesPodDetails           *KubernetesPodDetails           `json:"kubernetes_pod_details,omitempty"`
 	LocalDockerContainerDetails    *LocalDockerContainerDetails    `json:"local_docker_container_details,omitempty"`
 	NetworkHttpServerDetails       *NetworkHttpServerDetails       `json:"network_http_server_details,omitempty"`
 	NetworkHttpsServerDetails      *NetworkHttpsServerDetails      `json:"network_https_server_details,omitempty"`
