@@ -209,9 +209,12 @@ func (nd *NaiveNetworkDiscoverer) Discover(ctx context.Context) *discovery.Resul
 func checkService(ip string, port string) string {
 
 	for _, scheme := range []string{"https", "http"} {
-		client := &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}}
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+			Timeout: time.Second * 3, // TODO: make configurable
+		}
 		req, _ := http.NewRequest(
 			http.MethodGet,
 			fmt.Sprintf("%s://%s:%s", scheme, ip, port),
@@ -232,7 +235,7 @@ func checkService(ip string, port string) string {
 	}
 	defer conn.Close()
 
-	conn.SetDeadline(time.Now().Add(time.Millisecond * 1000))
+	conn.SetDeadline(time.Now().Add(time.Millisecond * 1000)) // TODO: make configurable
 
 	resp := make([]byte, 1024)
 	_, err = conn.Read(resp)

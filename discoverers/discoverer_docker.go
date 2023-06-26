@@ -46,14 +46,14 @@ func WithDockerDiscovererListContainersTimeout(timeout time.Duration) DockerDisc
 
 // NewDockerDiscoverer returns a new DockerDiscoverer, initialized with the given options.
 func NewDockerDiscoverer(opts ...DockerDiscovererOption) *DockerDiscoverer {
-	ldd := &DockerDiscoverer{
+	dd := &DockerDiscoverer{
 		discovererId:         defaultDockerDiscovererId,
 		containerListTimeout: defaultContainerListTimeout,
 	}
 	for _, opt := range opts {
-		opt(ldd)
+		opt(dd)
 	}
-	return ldd
+	return dd
 }
 
 // Discover runs the DockerDiscoverer.
@@ -89,9 +89,9 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 		localContainer := &discovery.LocalDockerContainerDetails{
 			ContainerId:  container.ID,
 			Image:        container.Image,
+			Names:        container.Names,
 			Status:       container.Status,
 			PortBindings: portBindings,
-			Names:        container.Names,
 			Labels:       container.Labels,
 		}
 
