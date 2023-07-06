@@ -76,10 +76,11 @@ type AwsEcsClusterDetails struct {
 
 	Tags map[string]string `json:"tags"`
 
-	ClusterName string   `json:"cluster_name"`
-	Services    []string `json:"services"`
-	Tasks       []string `json:"tasks"`
-	Containers  []string `json:"containers"`
+	ClusterName   string   `json:"cluster_name"`
+	ClusterStatus string   `json:"cluster_status"`
+	Services      []string `json:"services"`
+	Tasks         []string `json:"tasks"`
+	Containers    []string `json:"containers"`
 
 	// add any new fields as needed here
 }
@@ -90,7 +91,8 @@ type AwsRdsInstanceDetails struct {
 
 	Tags map[string]string `json:"tags"`
 
-	DBInstanceIdentifier string `json:"db_instance_identifier"`
+	DbInstanceIdentifier string `json:"db_instance_identifier"`
+	DbInstanceStatus     string `json:"db_instance_status"`
 	Engine               string `json:"engine"`
 	EngineVersion        string `json:"engine_version"`
 	VpcId                string `json:"vpc_id"`
@@ -106,6 +108,7 @@ type AwsSsmTargetDetails struct {
 	AwsBaseDetails // extends
 
 	InstanceId string `json:"instance_id"`
+	PingStatus string `json:"ping_status"`
 
 	// add any new fields as needed here
 }

@@ -80,9 +80,9 @@ func WithAwsEc2DiscovererIncludedInstanceStates(states ...types.InstanceStateNam
 	}
 }
 
-// WithAwsEc2DiscovererInclsionInstanceTags is the AwsEc2DiscovererOption
+// WithAwsEc2DiscovererInclusionInstanceTags is the AwsEc2DiscovererOption
 // to set the inclusion tags filter for instances to include in results.
-func WithAwsEc2DiscovererInclsionInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
+func WithAwsEc2DiscovererInclusionInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
 	return func(ec2d *AwsEc2Discoverer) {
 		ec2d.inclusionInstanceTags = tags
 	}
@@ -140,7 +140,7 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	// filter and build resources
 	for _, reservation := range describeInstancesOutput.Reservations {
 		for _, instance := range reservation.Instances {
-			// ignore unavailable instances
+			// ignore instances with no state
 			if instance.State == nil {
 				continue // NOTE: this should emit a warning.
 			}
@@ -149,7 +149,7 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 				continue
 			}
 			// ignore instances that don't satisfy tag conditions
-			if !evaluateTags(
+			if !evaluateEc2InstanceTags(
 				instance.Tags,
 				ec2d.inclusionInstanceTags,
 				ec2d.exclusionInstanceTags,
@@ -197,28 +197,7 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	return result
 }
 
-func tagMatches(
-	tag types.Tag,
-	filter map[string][]string,
-) bool {
-	for key, values := range filter {
-		if aws.ToString(tag.Key) == key {
-			// we interpret empty values slice
-			// as "match any value of the key"
-			if len(values) == 0 {
-				return true
-			}
-			for _, value := range values {
-				if aws.ToString(tag.Value) == value {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func evaluateTags(
+func evaluateEc2InstanceTags(
 	tags []types.Tag,
 	inclusion map[string][]string,
 	exclusion map[string][]string,
@@ -228,7 +207,11 @@ func evaluateTags(
 
 	if inclusion != nil {
 		for _, tag := range tags {
-			if tagMatches(tag, inclusion) {
+			if utils.TagMatchesFilter(
+				aws.ToString(tag.Key),
+				aws.ToString(tag.Value),
+				inclusion,
+			) {
 				included = true
 				break
 			}
@@ -237,7 +220,11 @@ func evaluateTags(
 
 	if exclusion != nil {
 		for _, tag := range tags {
-			if tagMatches(tag, exclusion) {
+			if utils.TagMatchesFilter(
+				aws.ToString(tag.Key),
+				aws.ToString(tag.Value),
+				exclusion,
+			) {
 				excluded = true
 				break
 			}

@@ -10,9 +10,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/rds v1.45.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.36.6
 	github.com/aws/aws-sdk-go-v2/service/sts v1.19.2
-	github.com/borderzero/border0-go v0.1.4
+	github.com/borderzero/border0-go v0.1.6
 	github.com/docker/docker v24.0.2+incompatible
-	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	k8s.io/api v0.27.3
 	k8s.io/apimachinery v0.27.3
 	k8s.io/client-go v0.27.3
