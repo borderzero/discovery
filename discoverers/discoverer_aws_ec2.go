@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	defaultAwsEc2DiscovererDiscovererId        = "aws_ec2_discoverer"
-	defaultAwsEc2DiscovererGetAccountIdTimeout = time.Second * 10
+	defaultAwsEc2DiscovererDiscovererId             = "aws_ec2_discoverer"
+	defaultAwsEc2DiscovererGetAccountIdTimeout      = time.Second * 10
+	defaultAwsEc2DiscovererDescribeInstancesTimeout = time.Second * 10
 )
 
 var (
@@ -34,9 +35,12 @@ var (
 type AwsEc2Discoverer struct {
 	cfg aws.Config
 
-	discovererId           string
-	getAccountIdTimeout    time.Duration
-	includedInstanceStates set.Set[types.InstanceStateName]
+	discovererId             string
+	getAccountIdTimeout      time.Duration
+	describeInstancesTimeout time.Duration
+	includedInstanceStates   set.Set[types.InstanceStateName]
+	inclusionInstanceTags    map[string][]string
+	exclusionInstanceTags    map[string][]string
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
@@ -60,6 +64,14 @@ func WithAwsEc2DiscovererGetAccountIdTimeout(timeout time.Duration) AwsEc2Discov
 	}
 }
 
+// WithAwsEc2DiscovererDescribeInstancesTimeout is the AwsEc2DiscovererOption
+// to set a non default timeout for the describe instnaces api call.
+func WithAwsEc2DiscovererDescribeInstancesTimeout(timeout time.Duration) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.describeInstancesTimeout = timeout
+	}
+}
+
 // WithAwsEc2DiscovererIncludedInstanceStates is the AwsEc2DiscovererOption
 // to set a non default list of states for instances to include in results.
 func WithAwsEc2DiscovererIncludedInstanceStates(states ...types.InstanceStateName) AwsEc2DiscovererOption {
@@ -68,14 +80,33 @@ func WithAwsEc2DiscovererIncludedInstanceStates(states ...types.InstanceStateNam
 	}
 }
 
+// WithAwsEc2DiscovererInclsionInstanceTags is the AwsEc2DiscovererOption
+// to set the inclusion tags filter for instances to include in results.
+func WithAwsEc2DiscovererInclsionInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.inclusionInstanceTags = tags
+	}
+}
+
+// WithAwsEc2DiscovererExclusionInstanceTags is the AwsEc2DiscovererOption
+// to set the exclusion tags filter for instances to exclude in results.
+func WithAwsEc2DiscovererExclusionInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.exclusionInstanceTags = tags
+	}
+}
+
 // NewEngine returns a new AwsEc2Discoverer, initialized with the given options.
 func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
 	ec2d := &AwsEc2Discoverer{
 		cfg: cfg,
 
-		discovererId:           defaultAwsEc2DiscovererDiscovererId,
-		getAccountIdTimeout:    defaultAwsEc2DiscovererGetAccountIdTimeout,
-		includedInstanceStates: defaultAwsEc2DiscovererIncludedInstanceStates,
+		discovererId:             defaultAwsEc2DiscovererDiscovererId,
+		getAccountIdTimeout:      defaultAwsEc2DiscovererGetAccountIdTimeout,
+		describeInstancesTimeout: defaultAwsEc2DiscovererDescribeInstancesTimeout,
+		includedInstanceStates:   defaultAwsEc2DiscovererIncludedInstanceStates,
+		inclusionInstanceTags:    nil,
+		exclusionInstanceTags:    nil,
 	}
 	for _, opt := range opts {
 		opt(ec2d)
@@ -95,9 +126,12 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	// describe ec2 instances
+	describeInstancesCtx, cancel := context.WithTimeout(ctx, ec2d.describeInstancesTimeout)
+	defer cancel()
+
+	// TODO: use paginator
 	ec2Client := ec2.NewFromConfig(ec2d.cfg)
-	// TODO: new context with timeout for describe instances
-	describeInstancesOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{})
+	describeInstancesOutput, err := ec2Client.DescribeInstances(describeInstancesCtx, &ec2.DescribeInstancesInput{})
 	if err != nil {
 		result.AddError(fmt.Errorf("failed to describe ec2 instances: %w", err))
 		return result
@@ -112,6 +146,14 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 			}
 			// ignore instances with un-included instance states
 			if !ec2d.includedInstanceStates.Has(instance.State.Name) {
+				continue
+			}
+			// ignore instances that don't satisfy tag conditions
+			if !evaluateTags(
+				instance.Tags,
+				ec2d.inclusionInstanceTags,
+				ec2d.exclusionInstanceTags,
+			) {
 				continue
 			}
 			// build resource
@@ -153,4 +195,54 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
+}
+
+func tagMatches(
+	tag types.Tag,
+	filter map[string][]string,
+) bool {
+	for key, values := range filter {
+		if aws.ToString(tag.Key) == key {
+			// we interpret empty values slice
+			// as "match any value of the key"
+			if len(values) == 0 {
+				return true
+			}
+			for _, value := range values {
+				if aws.ToString(tag.Value) == value {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func evaluateTags(
+	tags []types.Tag,
+	inclusion map[string][]string,
+	exclusion map[string][]string,
+) bool {
+	included := (inclusion == nil)
+	excluded := false
+
+	if inclusion != nil {
+		for _, tag := range tags {
+			if tagMatches(tag, inclusion) {
+				included = true
+				break
+			}
+		}
+	}
+
+	if exclusion != nil {
+		for _, tag := range tags {
+			if tagMatches(tag, exclusion) {
+				excluded = true
+				break
+			}
+		}
+	}
+
+	return included && !excluded
 }
