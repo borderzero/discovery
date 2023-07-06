@@ -62,8 +62,6 @@ github.com/aws/aws-sdk-go-v2/service/sts v1.19.2 h1:XFJ2Z6sNUUcAz9poj+245DMkrHE4
 github.com/aws/aws-sdk-go-v2/service/sts v1.19.2/go.mod h1:dp0yLPsLBOi++WTxzCjA/oZqi6NPIhoR+uF7GeMU9eg=
 github.com/aws/smithy-go v1.13.5 h1:hgz0X/DX0dGqTYpGALqXJoRKRj5oQ7150i5FdTePzO8=
 github.com/aws/smithy-go v1.13.5/go.mod h1:Tg+OJXh4MB2R/uN61Ko2f6hTZwB/ZYGOtib8J3gBHzA=
-github.com/borderzero/border0-go v0.1.4 h1:f+RXRBp1fs7EXCJC00usexEql7Yi8KeyZ7aAh53zcwg=
-github.com/borderzero/border0-go v0.1.4/go.mod h1:A4NGE3GI2f5NMJcWRuNDCTY6UBegTw4F2l1Q4wdULGY=
 github.com/borderzero/border0-go v0.1.6 h1:B8a1L4UB2eskPr7Utm8JLKbwwytETc7PsOUk4YPcBSs=
 github.com/borderzero/border0-go v0.1.6/go.mod h1:A4NGE3GI2f5NMJcWRuNDCTY6UBegTw4F2l1Q4wdULGY=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
