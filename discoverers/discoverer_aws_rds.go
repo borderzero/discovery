@@ -3,12 +3,14 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/borderzero/border0-go/lib/types/set"
+	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
 )
@@ -19,7 +21,7 @@ const (
 )
 
 var (
-	defaultAwsRdsDiscovererIncludedInstanceStatuses = set.New("Creating", "Starting", "Available", "Maintenance", "Mofifying")
+	defaultAwsRdsDiscovererIncludedInstanceStatuses = set.New("creating", "backing-up", "starting", "available", "maintenance", "modifying")
 )
 
 // AwsRdsDiscoverer represents a discoverer for AWS RDS resources.
@@ -58,7 +60,8 @@ func WithAwsRdsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsRdsDiscov
 // to set a non default list of statuses for instances to include in results.
 func WithAwsRdsDiscovererIncludedInstanceStatuses(statuses ...string) AwsRdsDiscovererOption {
 	return func(rdsd *AwsRdsDiscoverer) {
-		rdsd.includedInstanceStatuses = set.New(statuses...)
+		lowercased := slice.Transform(statuses, func(s string) string { return strings.ToLower(s) })
+		rdsd.includedInstanceStatuses = set.New(lowercased...)
 	}
 }
 

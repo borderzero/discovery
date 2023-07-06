@@ -117,7 +117,10 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 	// TODO: new context with timeout for describe clusters
 	// TODO: use paginator
-	describeClustersOutput, err := ecsClient.DescribeClusters(ctx, &ecs.DescribeClustersInput{Clusters: listClustersOutput.ClusterArns})
+	describeClustersOutput, err := ecsClient.DescribeClusters(ctx, &ecs.DescribeClustersInput{
+		Clusters: listClustersOutput.ClusterArns,
+		Include:  []types.ClusterField{types.ClusterFieldTags},
+	})
 	if err != nil {
 		result.AddError(fmt.Errorf("failed to describe ecs clusters: %w", err))
 		return result
