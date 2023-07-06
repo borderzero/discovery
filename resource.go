@@ -59,11 +59,13 @@ type AwsEc2InstanceDetails struct {
 	ImageId          string `json:"ami_id"`
 	VpcId            string `json:"vpc_id"`
 	SubnetId         string `json:"subnet_id"`
+	AvailabilityZone string `json:"availability_zone"`
 	PrivateDnsName   string `json:"private_dns_name"`
 	PrivateIpAddress string `json:"private_ip_address"`
 	PublicDnsName    string `json:"public_dns_name"`
 	PublicIpAddress  string `json:"public_ip_address"`
 	InstanceType     string `json:"instance_type"`
+	InstanceState    string `json:"instance_state"`
 
 	// add any new fields as needed here
 }
