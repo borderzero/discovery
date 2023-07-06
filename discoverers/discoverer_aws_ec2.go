@@ -37,6 +37,8 @@ type AwsEc2Discoverer struct {
 	discovererId           string
 	getAccountIdTimeout    time.Duration
 	includedInstanceStates set.Set[types.InstanceStateName]
+	includedInstanceTags   map[string][]string
+	excludedInstanceTags   map[string][]string
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
@@ -68,6 +70,22 @@ func WithAwsEc2DiscovererIncludedInstanceStates(states ...types.InstanceStateNam
 	}
 }
 
+// WithAwsEc2DiscovererIncludedInstanceTags is the AwsEc2DiscovererOption
+// to set the inclusion tags filter for instances to include in results.
+func WithAwsEc2DiscovererIncludedInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.includedInstanceTags = tags
+	}
+}
+
+// WithAwsEc2DiscovererExcludedInstanceTags is the AwsEc2DiscovererOption
+// to set the exclusion tags filter for instances to exclude in results.
+func WithAwsEc2DiscovererExcludedInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.excludedInstanceTags = tags
+	}
+}
+
 // NewEngine returns a new AwsEc2Discoverer, initialized with the given options.
 func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
 	ec2d := &AwsEc2Discoverer{
@@ -76,6 +94,8 @@ func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2
 		discovererId:           defaultAwsEc2DiscovererDiscovererId,
 		getAccountIdTimeout:    defaultAwsEc2DiscovererGetAccountIdTimeout,
 		includedInstanceStates: defaultAwsEc2DiscovererIncludedInstanceStates,
+		includedInstanceTags:   nil,
+		excludedInstanceTags:   nil,
 	}
 	for _, opt := range opts {
 		opt(ec2d)
@@ -112,6 +132,14 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 			}
 			// ignore instances with un-included instance states
 			if !ec2d.includedInstanceStates.Has(instance.State.Name) {
+				continue
+			}
+			// ignore instances that don't satisfy tag conditions
+			if !evaluateTags(
+				instance.Tags,
+				ec2d.includedInstanceTags,
+				ec2d.excludedInstanceTags,
+			) {
 				continue
 			}
 			// build resource
@@ -153,4 +181,54 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
+}
+
+func tagMatches(
+	tag types.Tag,
+	list map[string][]string,
+) bool {
+	for key, values := range list {
+		if aws.ToString(tag.Key) == key {
+			// we interpret empty values slice
+			// as "match any value of the key"
+			if len(values) == 0 {
+				return true
+			}
+			for _, value := range values {
+				if aws.ToString(tag.Value) == value {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func evaluateTags(
+	tags []types.Tag,
+	include map[string][]string,
+	exclude map[string][]string,
+) bool {
+	included := (include == nil)
+	excluded := false
+
+	if include != nil {
+		for _, tag := range tags {
+			if tagMatches(tag, include) {
+				included = true
+				break
+			}
+		}
+	}
+
+	if exclude != nil {
+		for _, tag := range tags {
+			if tagMatches(tag, exclude) {
+				excluded = true
+				break
+			}
+		}
+	}
+
+	return included && !excluded
 }
