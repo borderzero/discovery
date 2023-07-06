@@ -54,9 +54,9 @@ func WithAwsRdsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsRdsDiscov
 	}
 }
 
-// WithAwsRdsDiscovererIncludedClusterStatuses is the AwsRdsDiscovererOption
+// WithAwsRdsDiscovererIncludedInstanceStatuses is the AwsRdsDiscovererOption
 // to set a non default list of statuses for instances to include in results.
-func WithAwsRdsDiscovererIncludedClusterStatuses(statuses ...string) AwsRdsDiscovererOption {
+func WithAwsRdsDiscovererIncludedInstanceStatuses(statuses ...string) AwsRdsDiscovererOption {
 	return func(rdsd *AwsRdsDiscoverer) {
 		rdsd.includedInstanceStatuses = set.New(statuses...)
 	}
