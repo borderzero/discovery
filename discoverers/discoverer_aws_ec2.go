@@ -8,9 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/borderzero/border0-go/lib/types/pointer"
+	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -18,12 +19,24 @@ const (
 	defaultAwsEc2DiscovererGetAccountIdTimeout = time.Second * 10
 )
 
+var (
+	defaultAwsEc2DiscovererIncludedInstanceStates = set.New(
+		types.InstanceStateNamePending,
+		types.InstanceStateNameRunning,
+		types.InstanceStateNameShuttingDown,
+		types.InstanceStateNameTerminated,
+		types.InstanceStateNameStopping,
+		types.InstanceStateNameStopped,
+	)
+)
+
 // AwsEc2Discoverer represents a discoverer for AWS EC2 resources.
 type AwsEc2Discoverer struct {
 	cfg aws.Config
 
-	discovererId        string
-	getAccountIdTimeout time.Duration
+	discovererId           string
+	getAccountIdTimeout    time.Duration
+	includedInstanceStates set.Set[types.InstanceStateName]
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
@@ -47,13 +60,22 @@ func WithAwsEc2DiscovererGetAccountIdTimeout(timeout time.Duration) AwsEc2Discov
 	}
 }
 
+// WithAwsEc2DiscovererIncludedInstanceStates is the AwsEc2DiscovererOption
+// to set a non default list of states for instances to include in results.
+func WithAwsEc2DiscovererIncludedInstanceStates(states ...types.InstanceStateName) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.includedInstanceStates = set.New(states...)
+	}
+}
+
 // NewEngine returns a new AwsEc2Discoverer, initialized with the given options.
 func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2Discoverer {
 	ec2d := &AwsEc2Discoverer{
 		cfg: cfg,
 
-		discovererId:        defaultAwsEc2DiscovererDiscovererId,
-		getAccountIdTimeout: defaultAwsEc2DiscovererGetAccountIdTimeout,
+		discovererId:           defaultAwsEc2DiscovererDiscovererId,
+		getAccountIdTimeout:    defaultAwsEc2DiscovererGetAccountIdTimeout,
+		includedInstanceStates: defaultAwsEc2DiscovererIncludedInstanceStates,
 	}
 	for _, opt := range opts {
 		opt(ec2d)
@@ -85,8 +107,11 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	for _, reservation := range describeInstancesOutput.Reservations {
 		for _, instance := range reservation.Instances {
 			// ignore unavailable instances
-			if instance.State == nil ||
-				!slices.Contains([]types.InstanceStateName{types.InstanceStateNameRunning, types.InstanceStateNamePending}, instance.State.Name) {
+			if instance.State == nil {
+				continue // NOTE: this should emit a warning.
+			}
+			// ignore instances with un-included instance states
+			if !ec2d.includedInstanceStates.Has(instance.State.Name) {
 				continue
 			}
 			// build resource
@@ -112,11 +137,13 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 				ImageId:          aws.ToString(instance.ImageId),
 				VpcId:            aws.ToString(instance.VpcId),
 				SubnetId:         aws.ToString(instance.SubnetId),
+				AvailabilityZone: aws.ToString(pointer.ValueOrZero(instance.Placement).AvailabilityZone),
 				PrivateDnsName:   aws.ToString(instance.PrivateDnsName),
 				PrivateIpAddress: aws.ToString(instance.PrivateIpAddress),
 				PublicDnsName:    aws.ToString(instance.PublicDnsName),
 				PublicIpAddress:  aws.ToString(instance.PublicIpAddress),
 				InstanceType:     string(instance.InstanceType),
+				InstanceState:    string(pointer.ValueOrZero(instance.State).Name),
 			}
 			result.AddResources(discovery.Resource{
 				ResourceType:          discovery.ResourceTypeAwsEc2Instance,

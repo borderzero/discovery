@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/discoverers"
@@ -23,7 +24,13 @@ func main() {
 
 	engine := engines.NewOneOffEngine(
 		engines.OneOffEngineOptionWithDiscoverers(
-			discoverers.NewAwsEc2Discoverer(cfg),
+			discoverers.NewAwsEc2Discoverer(
+				cfg,
+				discoverers.WithAwsEc2DiscovererIncludedInstanceStates(
+					types.InstanceStateNamePending,
+					types.InstanceStateNameRunning,
+				),
+			),
 			discoverers.NewAwsEcsDiscoverer(cfg),
 			discoverers.NewAwsRdsDiscoverer(cfg),
 			discoverers.NewAwsSsmDiscoverer(cfg),
