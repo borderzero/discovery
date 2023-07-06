@@ -7,6 +7,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
+	"github.com/aws/aws-sdk-go-v2/service/rds/types"
+	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
 )
@@ -16,12 +18,19 @@ const (
 	defaultAwsRdsDiscovererGetAccountIdTimeout = time.Second * 10
 )
 
+var (
+	defaultAwsRdsDiscovererIncludedInstanceStatuses = set.New("Creating", "Starting", "Available", "Maintenance", "Mofifying")
+)
+
 // AwsRdsDiscoverer represents a discoverer for AWS RDS resources.
 type AwsRdsDiscoverer struct {
 	cfg aws.Config
 
-	discovererId        string
-	getAccountIdTimeout time.Duration
+	discovererId             string
+	getAccountIdTimeout      time.Duration
+	includedInstanceStatuses set.Set[string]
+	inclusionInstanceTags    map[string][]string
+	exclusionInstanceTags    map[string][]string
 }
 
 // ensure AwsRdsDiscoverer implements discovery.Discoverer at compile-time.
@@ -45,13 +54,40 @@ func WithAwsRdsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsRdsDiscov
 	}
 }
 
+// WithAwsRdsDiscovererIncludedClusterStatuses is the AwsRdsDiscovererOption
+// to set a non default list of statuses for instances to include in results.
+func WithAwsRdsDiscovererIncludedClusterStatuses(statuses ...string) AwsRdsDiscovererOption {
+	return func(rdsd *AwsRdsDiscoverer) {
+		rdsd.includedInstanceStatuses = set.New(statuses...)
+	}
+}
+
+// WithAwsRdsDiscovererInclusionInstanceTags is the AwsRdsDiscovererOption
+// to set the inclusion tags filter for instances to include in results.
+func WithAwsRdsDiscovererInclusionInstanceTags(tags map[string][]string) AwsRdsDiscovererOption {
+	return func(rdsd *AwsRdsDiscoverer) {
+		rdsd.inclusionInstanceTags = tags
+	}
+}
+
+// WithAwsRdsDiscovererExclusionInstanceTags is the AwsRdsDiscovererOption
+// to set the exclusion tags filter for instances to exclude in results.
+func WithAwsRdsDiscovererExclusionInstanceTags(tags map[string][]string) AwsRdsDiscovererOption {
+	return func(rdsd *AwsRdsDiscoverer) {
+		rdsd.exclusionInstanceTags = tags
+	}
+}
+
 // NewAwsRdsDiscoverer returns a new AwsRdsDiscoverer, initialized with the given options.
 func NewAwsRdsDiscoverer(cfg aws.Config, opts ...AwsRdsDiscovererOption) *AwsRdsDiscoverer {
 	rdsd := &AwsRdsDiscoverer{
 		cfg: cfg,
 
-		discovererId:        defaultAwsRdsDiscovererDiscovererId,
-		getAccountIdTimeout: defaultAwsRdsDiscovererGetAccountIdTimeout,
+		discovererId:             defaultAwsRdsDiscovererDiscovererId,
+		getAccountIdTimeout:      defaultAwsRdsDiscovererGetAccountIdTimeout,
+		includedInstanceStatuses: defaultAwsRdsDiscovererIncludedInstanceStatuses,
+		inclusionInstanceTags:    nil,
+		exclusionInstanceTags:    nil,
 	}
 	for _, opt := range opts {
 		opt(rdsd)
@@ -81,8 +117,20 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 
 	// filter and build resources
 	for _, instance := range describeDBInstancesOutput.DBInstances {
-		// ignore unavailable instances
-		if instance.DBInstanceStatus == nil || aws.ToString(instance.DBInstanceStatus) != "available" {
+		// ignore instances with no status
+		if instance.DBInstanceStatus == nil {
+			continue // NOTE: this should emit a warning.
+		}
+		// ignore instances with un-included instance status
+		if !rdsd.includedInstanceStatuses.Has(aws.ToString(instance.DBInstanceStatus)) {
+			continue
+		}
+		// ignore rds db instances that don't satisfy tag conditions
+		if !evaluateRdsInstanceTags(
+			instance.TagList,
+			rdsd.inclusionInstanceTags,
+			rdsd.exclusionInstanceTags,
+		) {
 			continue
 		}
 		// build resource
@@ -98,7 +146,8 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 		rdsInstanceDetails := &discovery.AwsRdsInstanceDetails{
 			AwsBaseDetails:       awsBaseDetails,
 			Tags:                 tags,
-			DBInstanceIdentifier: aws.ToString(instance.DBInstanceIdentifier),
+			DbInstanceIdentifier: aws.ToString(instance.DBInstanceIdentifier),
+			DbInstanceStatus:     aws.ToString(instance.DBInstanceStatus),
 			Engine:               aws.ToString(instance.Engine),
 			EngineVersion:        aws.ToString(instance.EngineVersion),
 		}
@@ -123,4 +172,41 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
+}
+
+func evaluateRdsInstanceTags(
+	tags []types.Tag,
+	inclusion map[string][]string,
+	exclusion map[string][]string,
+) bool {
+	included := (inclusion == nil)
+	excluded := false
+
+	if inclusion != nil {
+		for _, tag := range tags {
+			if utils.TagMatchesFilter(
+				aws.ToString(tag.Key),
+				aws.ToString(tag.Value),
+				inclusion,
+			) {
+				included = true
+				break
+			}
+		}
+	}
+
+	if exclusion != nil {
+		for _, tag := range tags {
+			if utils.TagMatchesFilter(
+				aws.ToString(tag.Key),
+				aws.ToString(tag.Value),
+				exclusion,
+			) {
+				excluded = true
+				break
+			}
+		}
+	}
+
+	return included && !excluded
 }

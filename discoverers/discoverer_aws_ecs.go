@@ -7,9 +7,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -17,12 +18,19 @@ const (
 	defaultAwsEcsDiscovererGetAccountIdTimeout = time.Second * 10
 )
 
+var (
+	defaultAwsEcsDiscovererIncludedClusterStatuses = set.New("ACTIVE", "PROVISIONING")
+)
+
 // AwsEcsDiscoverer represents a discoverer for AWS ECS resources.
 type AwsEcsDiscoverer struct {
 	cfg aws.Config
 
-	discovererId        string
-	getAccountIdTimeout time.Duration
+	discovererId            string
+	getAccountIdTimeout     time.Duration
+	includedClusterStatuses set.Set[string]
+	inclusionClusterTags    map[string][]string
+	exclusionClusterTags    map[string][]string
 }
 
 // ensure AwsEcsDiscoverer implements discovery.Discoverer at compile-time.
@@ -46,13 +54,40 @@ func WithAwsEcsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsEcsDiscov
 	}
 }
 
+// WithAwsEcsDiscovererIncludedClusterStatuses is the AwsEcsDiscovererOption
+// to set a non default list of statuses for clusters to include in results.
+func WithAwsEcsDiscovererIncludedClusterStatuses(statuses ...string) AwsEcsDiscovererOption {
+	return func(ecsd *AwsEcsDiscoverer) {
+		ecsd.includedClusterStatuses = set.New(statuses...)
+	}
+}
+
+// WithAwsEcsDiscovererInclusionClusterTags is the AwsEcsDiscovererOption
+// to set the inclusion tags filter for clusters to include in results.
+func WithAwsEcsDiscovererInclusionClusterTags(tags map[string][]string) AwsEcsDiscovererOption {
+	return func(ecsd *AwsEcsDiscoverer) {
+		ecsd.inclusionClusterTags = tags
+	}
+}
+
+// WithAwsEcsDiscovererExclusionClusterTags is the AwsEcsDiscovererOption
+// to set the inclusion tags filter for clusters to exclude in results.
+func WithAwsEcsDiscovererExclusionClusterTags(tags map[string][]string) AwsEcsDiscovererOption {
+	return func(ecsd *AwsEcsDiscoverer) {
+		ecsd.exclusionClusterTags = tags
+	}
+}
+
 // NewAwsEcsDiscoverer returns a new AwsEcsDiscoverer.
 func NewAwsEcsDiscoverer(cfg aws.Config, opts ...AwsEcsDiscovererOption) *AwsEcsDiscoverer {
 	ecsd := &AwsEcsDiscoverer{
 		cfg: cfg,
 
-		discovererId:        defaultAwsEcsDiscovererDiscovererId,
-		getAccountIdTimeout: defaultAwsEcsDiscovererGetAccountIdTimeout,
+		discovererId:            defaultAwsEcsDiscovererDiscovererId,
+		getAccountIdTimeout:     defaultAwsEcsDiscovererGetAccountIdTimeout,
+		includedClusterStatuses: defaultAwsEcsDiscovererIncludedClusterStatuses,
+		inclusionClusterTags:    nil,
+		exclusionClusterTags:    nil,
 	}
 	for _, opt := range opts {
 		opt(ecsd)
@@ -90,8 +125,20 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 
 	// filter and build resources
 	for _, cluster := range describeClustersOutput.Clusters {
-		// ignore unavailable clusters
-		if !slices.Contains([]string{"ACTIVE", "PROVISIONING"}, aws.ToString(cluster.Status)) {
+		// ignore clusters with no status
+		if cluster.Status == nil {
+			continue // NOTE: this should emit a warning.
+		}
+		// ignore clusters with un-included cluster states
+		if !ecsd.includedClusterStatuses.Has(aws.ToString(cluster.Status)) {
+			continue
+		}
+		// ignore clusters that don't satisfy tag conditions
+		if !evaluateEcsClusterTags(
+			cluster.Tags,
+			ecsd.inclusionClusterTags,
+			ecsd.exclusionClusterTags,
+		) {
 			continue
 		}
 		// build resource
@@ -112,6 +159,7 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			AwsBaseDetails: awsBaseDetails,
 			Tags:           tags,
 			ClusterName:    aws.ToString(cluster.ClusterName),
+			ClusterStatus:  aws.ToString(cluster.Status),
 			// TODO: add details
 		}
 		result.AddResources(discovery.Resource{
@@ -121,4 +169,41 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
+}
+
+func evaluateEcsClusterTags(
+	tags []types.Tag,
+	inclusion map[string][]string,
+	exclusion map[string][]string,
+) bool {
+	included := (inclusion == nil)
+	excluded := false
+
+	if inclusion != nil {
+		for _, tag := range tags {
+			if utils.TagMatchesFilter(
+				aws.ToString(tag.Key),
+				aws.ToString(tag.Value),
+				inclusion,
+			) {
+				included = true
+				break
+			}
+		}
+	}
+
+	if exclusion != nil {
+		for _, tag := range tags {
+			if utils.TagMatchesFilter(
+				aws.ToString(tag.Key),
+				aws.ToString(tag.Value),
+				exclusion,
+			) {
+				excluded = true
+				break
+			}
+		}
+	}
+
+	return included && !excluded
 }

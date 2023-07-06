@@ -8,9 +8,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -20,14 +20,20 @@ const (
 	defaultSsmPaginatorMaxResults       = 50 // api allows max of 50
 )
 
+var (
+	defaultAwsSsmDiscovererIncludedInstancePingStatuses = set.New(types.PingStatusOnline)
+)
+
 // AwsSsmDiscoverer represents a discoverer for AWS SSM resources.
 type AwsSsmDiscoverer struct {
 	cfg aws.Config
 
-	discovererId                string
-	ssmPaginatorMaxResults      int
-	ssmPaginatorNextPageTimeout time.Duration
-	getAccountIdTimeout         time.Duration
+	discovererId                 string
+	ssmPaginatorMaxResults       int
+	ssmPaginatorNextPageTimeout  time.Duration
+	getAccountIdTimeout          time.Duration
+	excludeInstanceNotPingedIn   time.Duration
+	includedInstancePingStatuses set.Set[types.PingStatus]
 }
 
 // ensure AwsSsmDiscoverer implements discovery.Discoverer at compile-time.
@@ -51,15 +57,25 @@ func WithAwsSsmDiscovererGetAccountIdTimeout(timeout time.Duration) AwsSsmDiscov
 	}
 }
 
+// WithAwsSsmDiscovererIncludedInstancePingStatuses is the AwsSsmDiscovererOption
+// to set a non default list of ping statuses for instances to include in results.
+func WithAwsSsmDiscovererIncludedInstancePingStatuses(statuses ...types.PingStatus) AwsSsmDiscovererOption {
+	return func(ssmd *AwsSsmDiscoverer) {
+		ssmd.includedInstancePingStatuses = set.New(statuses...)
+	}
+}
+
 // NewAwsSsmDiscoverer returns a new AwsSsmDiscoverer, initialized with the given options.
 func NewAwsSsmDiscoverer(cfg aws.Config, opts ...AwsSsmDiscovererOption) *AwsSsmDiscoverer {
 	ssmd := &AwsSsmDiscoverer{
 		cfg: cfg,
 
-		discovererId:                defaultAwsSsmDiscovererDiscovererId,
-		getAccountIdTimeout:         defaultSsmGetAccountIdTimeout,
-		ssmPaginatorNextPageTimeout: defaultSsmPaginatorNextPageTimeout,
-		ssmPaginatorMaxResults:      defaultSsmPaginatorMaxResults,
+		discovererId:                 defaultAwsSsmDiscovererDiscovererId,
+		getAccountIdTimeout:          defaultSsmGetAccountIdTimeout,
+		ssmPaginatorNextPageTimeout:  defaultSsmPaginatorNextPageTimeout,
+		ssmPaginatorMaxResults:       defaultSsmPaginatorMaxResults,
+		excludeInstanceNotPingedIn:   time.Minute * 10, // FIXME: default + make input option
+		includedInstancePingStatuses: defaultAwsSsmDiscovererIncludedInstancePingStatuses,
 	}
 	for _, opt := range opts {
 		opt(ssmd)
@@ -91,8 +107,8 @@ func (ssmd *AwsSsmDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			ctx,
 			paginator,
 			ssmd.ssmPaginatorNextPageTimeout,
-			time.Minute*10, // fixme: make input opt
-			[]types.PingStatus{types.PingStatusOnline}, // fixme: make input opt
+			ssmd.excludeInstanceNotPingedIn,
+			ssmd.includedInstancePingStatuses,
 			ssmd.cfg.Region,
 			awsAccountId,
 		)
@@ -110,8 +126,8 @@ func processSsmDescribeInstanceInformationPage(
 	ctx context.Context,
 	paginator *ssm.DescribeInstanceInformationPaginator,
 	nextPageTimeout time.Duration,
-	includeIfPingedSince time.Duration,
-	includePingStatuses []types.PingStatus,
+	excludeInstanceNotPingedIn time.Duration,
+	includePingStatuses set.Set[types.PingStatus],
 	awsRegion string,
 	awsAccountId string,
 ) ([]discovery.Resource, error) {
@@ -126,12 +142,12 @@ func processSsmDescribeInstanceInformationPage(
 
 	resources := []discovery.Resource{}
 	for _, instanceInformation := range describeInstanceInformationOutput.InstanceInformationList {
-		// ignore instances not seen in a given time
-		if aws.ToTime(instanceInformation.LastPingDateTime).Before(time.Now().Add(-1 * includeIfPingedSince)) {
+		// ignore instances with an excluded ping status
+		if !includePingStatuses.Has(instanceInformation.PingStatus) {
 			continue
 		}
-		// ignore instances with an excluded ping status
-		if !slices.Contains(includePingStatuses, instanceInformation.PingStatus) {
+		// ignore instances not seen in a given time
+		if aws.ToTime(instanceInformation.LastPingDateTime).Before(time.Now().Add(-1 * excludeInstanceNotPingedIn)) {
 			continue
 		}
 		// build resource
@@ -148,6 +164,7 @@ func processSsmDescribeInstanceInformationPage(
 		ssmTarget := &discovery.AwsSsmTargetDetails{
 			AwsBaseDetails: awsBaseDetails,
 			InstanceId:     aws.ToString(instanceInformation.InstanceId),
+			PingStatus:     string(instanceInformation.PingStatus),
 		}
 		resources = append(resources, discovery.Resource{
 			ResourceType:        discovery.ResourceTypeAwsSsmTarget,
