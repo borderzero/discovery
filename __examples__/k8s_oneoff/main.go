@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/discoverers"
@@ -15,7 +16,9 @@ func main() {
 
 	engine := engines.NewOneOffEngine(
 		engines.OneOffEngineOptionWithDiscoverers(
-			discoverers.NewKubernetesDiscoverer( /* opts */ ),
+			discoverers.NewKubernetesDiscoverer(
+				discoverers.WithKubernetesDiscovererKubeconfigPath(fmt.Sprintf("%s/.kube/config", os.Getenv("HOME"))),
+			),
 		),
 	)
 

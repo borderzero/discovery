@@ -3,16 +3,14 @@ package discoverers
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/border0-go/lib/types/pointer"
-	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
-	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,13 +20,9 @@ const (
 	defaultKubernetesDiscovererId = "kubernetes_discoverer"
 
 	defaultKubernetesDiscovererMasterUrl       = ""
+	defaultKubernetesDiscovererKubeconfigPath  = ""
 	defaultKubernetesDiscovererNamespace       = "default"
 	defaultKubernetesDiscovererListPodsTimeout = time.Second * 5
-)
-
-var (
-	defaultKubernetesDiscovererKubeconfigPath      = fmt.Sprintf("%s/.kube/config", os.Getenv("HOME"))
-	defaultKubernetesDiscovererIncludedPodStatuses = set.New(corev1.PodPending, corev1.PodRunning)
 )
 
 // KubernetesDiscoverer represents a discoverer for Kubernetes pods.
@@ -43,9 +37,8 @@ type KubernetesDiscoverer struct {
 	// until all paginated results are returned
 	listPodsTimeout time.Duration
 
-	includedPodStatuses set.Set[corev1.PodPhase]
-	inclusionPodLabels  map[string][]string
-	exclusionPodLabels  map[string][]string
+	inclusionServiceLabels map[string][]string
+	exclusionServiceLabels map[string][]string
 }
 
 // ensure KubernetesDiscoverer implements discovery.Discoverer at compile-time.
@@ -85,39 +78,32 @@ func WithKubernetesDiscovererNamespace(namespace string) KubernetesDiscovererOpt
 	}
 }
 
-// WithKubernetesDiscovererIncludedPodStatuses is the AwsRdsDiscovererOption
-// to set a non default list of statuses for pods to include in results.
-func WithKubernetesDiscovererIncludedPodStatuses(statuses ...corev1.PodPhase) KubernetesDiscovererOption {
-	return func(k8d *KubernetesDiscoverer) { k8d.includedPodStatuses = set.New(statuses...) }
-}
-
-// WithKubernetesDiscovererInclusionPodLabels is the KubernetesDiscovererOption
-// to set the inclusion labels filter for pods to include in results.
-func WithKubernetesDiscovererInclusionPodLabels(labels map[string][]string) KubernetesDiscovererOption {
+// WithKubernetesDiscovererInclusionServiceLabels is the KubernetesDiscovererOption
+// to set the inclusion labels filter for services to include in results.
+func WithKubernetesDiscovererInclusionServiceLabels(labels map[string][]string) KubernetesDiscovererOption {
 	return func(k8d *KubernetesDiscoverer) {
-		k8d.inclusionPodLabels = labels
+		k8d.inclusionServiceLabels = labels
 	}
 }
 
-// WithKubernetesDiscovererExclusionPodLabels is the KubernetesDiscovererOption
-// to set the exclusion labels filter for pods to exclude in results.
-func WithKubernetesDiscovererExclusionPodLabels(labels map[string][]string) KubernetesDiscovererOption {
+// WithKubernetesDiscovererExclusionServiceLabels is the KubernetesDiscovererOption
+// to set the exclusion labels filter for services to exclude in results.
+func WithKubernetesDiscovererExclusionServiceLabels(labels map[string][]string) KubernetesDiscovererOption {
 	return func(k8d *KubernetesDiscoverer) {
-		k8d.exclusionPodLabels = labels
+		k8d.exclusionServiceLabels = labels
 	}
 }
 
 // NewKubernetesDiscoverer returns a new KubernetesDiscoverer, initialized with the given options.
 func NewKubernetesDiscoverer(opts ...KubernetesDiscovererOption) *KubernetesDiscoverer {
 	k8d := &KubernetesDiscoverer{
-		discovererId:        defaultKubernetesDiscovererId,
-		masterUrl:           defaultKubernetesDiscovererMasterUrl,
-		kubeconfigPath:      defaultKubernetesDiscovererKubeconfigPath,
-		namespace:           defaultKubernetesDiscovererNamespace,
-		listPodsTimeout:     defaultKubernetesDiscovererListPodsTimeout,
-		includedPodStatuses: defaultKubernetesDiscovererIncludedPodStatuses,
-		inclusionPodLabels:  nil,
-		exclusionPodLabels:  nil,
+		discovererId:           defaultKubernetesDiscovererId,
+		masterUrl:              defaultKubernetesDiscovererMasterUrl,
+		kubeconfigPath:         defaultKubernetesDiscovererKubeconfigPath,
+		namespace:              defaultKubernetesDiscovererNamespace,
+		listPodsTimeout:        defaultKubernetesDiscovererListPodsTimeout,
+		inclusionServiceLabels: nil,
+		exclusionServiceLabels: nil,
 	}
 	for _, opt := range opts {
 		opt(k8d)
@@ -151,41 +137,41 @@ func (k8d *KubernetesDiscoverer) Discover(ctx context.Context) *discovery.Result
 	}
 
 	for {
-		// make k8s api call to list pods
-		pods, err := clientset.CoreV1().Pods(k8d.namespace).List(ctx, opts)
+		// make k8s api call to list services
+		services, err := clientset.CoreV1().Services(k8d.namespace).List(ctx, opts)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to list pods via k8s api: %v", err))
+			result.AddError(fmt.Errorf("failed to list services via k8s api: %v", err))
 			return result
 		}
-		// process pods
-		for _, pod := range pods.Items {
-			// ignore pods with an excluded status
-			if !k8d.includedPodStatuses.Has(pod.Status.Phase) {
+		// process services
+		for _, service := range services.Items {
+			// ignore services that don't satisfy label conditions
+			if !evaluateKubernetesLabels(service.Labels, k8d.inclusionServiceLabels, k8d.exclusionServiceLabels) {
 				continue
 			}
-			// ignore pods that don't satisfy label conditions
-			if !evaluateKubernetesPodLabels(pod.Labels, k8d.inclusionPodLabels, k8d.exclusionPodLabels) {
-				continue
-			}
+
 			// build resource
 			result.AddResources(discovery.Resource{
-				ResourceType: discovery.ResourceTypeKubernetesPod,
-				KubernetesPodDetails: &discovery.KubernetesPodDetails{
-					Namespace:   pod.Namespace,
-					PodName:     pod.Name,
-					PodIP:       pod.Status.PodIP,
-					NodeName:    pod.Spec.NodeName,
-					Status:      string(pod.Status.Phase),
-					Containers:  slice.Transform(pod.Spec.Containers, containerSpecToDetails),
-					Labels:      maps.EnsureNotNil(pod.Labels),
-					Annotations: maps.EnsureNotNil(pod.Annotations),
+				ResourceType: discovery.ResourceTypeKubernetesService,
+				KubernetesServiceDetails: &discovery.KubernetesServiceDetails{
+					Namespace:      service.Namespace,
+					Name:           service.Name,
+					Uid:            string(service.UID),
+					ServiceType:    string(service.Spec.Type),
+					ExternalName:   service.Spec.ExternalName,
+					LoadBalancerIp: service.Spec.LoadBalancerIP,
+					ClusterIp:      service.Spec.ClusterIP,
+					ClusterIps:     service.Spec.ClusterIPs,
+					Ports:          slice.Transform(service.Spec.Ports, portSpecToDetails),
+					Labels:         maps.EnsureNotNil(service.Labels),
+					Annotations:    maps.EnsureNotNil(service.Annotations),
 				},
 			})
 		}
 
 		// check if there are more results
-		if pods.Continue != "" {
-			opts.Continue = pods.Continue
+		if services.Continue != "" {
+			opts.Continue = services.Continue
 			continue
 		}
 
@@ -195,14 +181,18 @@ func (k8d *KubernetesDiscoverer) Discover(ctx context.Context) *discovery.Result
 	return result
 }
 
-func containerSpecToDetails(container corev1.Container) discovery.KubernetesContainerDetails {
-	return discovery.KubernetesContainerDetails{
-		Name:  container.Name,
-		Image: container.Image,
+func portSpecToDetails(port v1.ServicePort) discovery.KubernetesServicePort {
+	return discovery.KubernetesServicePort{
+		Name:        port.Name,
+		Protocol:    string(port.Protocol),
+		AppProtocol: port.AppProtocol,
+		Port:        port.Port,
+		TargetPort:  port.TargetPort.String(),
+		NodePort:    port.NodePort,
 	}
 }
 
-func evaluateKubernetesPodLabels(
+func evaluateKubernetesLabels(
 	labels map[string]string,
 	inclusion map[string][]string,
 	exclusion map[string][]string,
