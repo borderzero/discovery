@@ -13,8 +13,8 @@ const (
 	// ResourceTypeAwsSsmTarget is the resource type for AWS SSM targets.
 	ResourceTypeAwsSsmTarget = "aws_ssm_target"
 
-	// ResourceTypeKubernetesPod is the resource type for kubernetes pods.
-	ResourceTypeKubernetesPod = "kubernetes_pod"
+	// ResourceTypeKubernetesService is the resource type for kubernetes services.
+	ResourceTypeKubernetesService = "kubernetes_service"
 
 	// ResourceTypeLocalDockerContainer is the resource type for containers managed by the local Docker daemon.
 	ResourceTypeLocalDockerContainer = "local_docker_container"
@@ -113,24 +113,29 @@ type AwsSsmTargetDetails struct {
 	// add any new fields as needed here
 }
 
-// KubernetesContainerDetails represents the details of a discovered kubernetes container.
-type KubernetesContainerDetails struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
-
-	// add any new fields as needed here
+// KubernetesServicePort represents the details of a port for a kubernetes service.
+type KubernetesServicePort struct {
+	Name        string  `json:"name,omitempty"`
+	Protocol    string  `json:"protocol,omitempty"`
+	AppProtocol *string `json:"app_protocol,omitempty"`
+	Port        int32   `json:"port"`
+	TargetPort  string  `json:"target_port,omitempty"`
+	NodePort    int32   `json:"node_port,omitempty"`
 }
 
-// KubernetesPodDetails represents the details of a discovered kubernetes pod.
-type KubernetesPodDetails struct {
-	Namespace   string                       `json:"namespace"`
-	PodName     string                       `json:"pod_name"`
-	PodIP       string                       `json:"pod_ip"`
-	NodeName    string                       `json:"node_name"`
-	Status      string                       `json:"status"`
-	Containers  []KubernetesContainerDetails `json:"containers"`
-	Labels      map[string]string            `json:"labels"`
-	Annotations map[string]string            `json:"annotations"`
+// KubernetesServiceDetails represents the details of a discovered kubernetes service.
+type KubernetesServiceDetails struct {
+	Namespace      string                  `json:"namespace"`
+	Name           string                  `json:"name"`
+	Uid            string                  `json:"uid"`
+	ServiceType    string                  `json:"service_type"`
+	ExternalName   string                  `json:"external_name,omitempty"`
+	LoadBalancerIp string                  `json:"load_balancer_ip,omitempty"`
+	ClusterIp      string                  `json:"cluster_ip"`
+	ClusterIps     []string                `json:"cluster_ips"`
+	Ports          []KubernetesServicePort `json:"ports"`
+	Labels         map[string]string       `json:"labels"`
+	Annotations    map[string]string       `json:"annotations"`
 
 	// add any new fields as needed here
 }
@@ -196,7 +201,7 @@ type Resource struct {
 	AwsEcsClusterDetails           *AwsEcsClusterDetails           `json:"aws_ecs_cluster_details,omitempty"`
 	AwsRdsInstanceDetails          *AwsRdsInstanceDetails          `json:"aws_rds_instance_details,omitempty"`
 	AwsSsmTargetDetails            *AwsSsmTargetDetails            `json:"aws_ssm_target_details,omitempty"`
-	KubernetesPodDetails           *KubernetesPodDetails           `json:"kubernetes_pod_details,omitempty"`
+	KubernetesServiceDetails       *KubernetesServiceDetails       `json:"kubernetes_service_details,omitempty"`
 	LocalDockerContainerDetails    *LocalDockerContainerDetails    `json:"local_docker_container_details,omitempty"`
 	NetworkHttpServerDetails       *NetworkHttpServerDetails       `json:"network_http_server_details,omitempty"`
 	NetworkHttpsServerDetails      *NetworkHttpsServerDetails      `json:"network_https_server_details,omitempty"`
