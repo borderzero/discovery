@@ -8,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/borderzero/border0-go/lib/types/set"
@@ -18,6 +20,7 @@ import (
 
 const (
 	defaultAwsEc2DiscovererDiscovererId             = "aws_ec2_discoverer"
+	defaultAwsEc2SsmStatusCheckEnabled              = true
 	defaultAwsEc2DiscovererGetAccountIdTimeout      = time.Second * 10
 	defaultAwsEc2DiscovererDescribeInstancesTimeout = time.Second * 10
 )
@@ -38,6 +41,7 @@ type AwsEc2Discoverer struct {
 	cfg aws.Config
 
 	discovererId             string
+	ssmStatusCheckEnabled    bool
 	getAccountIdTimeout      time.Duration
 	describeInstancesTimeout time.Duration
 	includedInstanceStates   set.Set[types.InstanceStateName]
@@ -56,6 +60,12 @@ func WithAwsEc2DiscovererDiscovererId(discovererId string) AwsEc2DiscovererOptio
 	return func(ec2d *AwsEc2Discoverer) {
 		ec2d.discovererId = discovererId
 	}
+}
+
+// WithAwsEc2DiscovererSsmStatusCheck is the AwsEc2DiscovererOption
+// to enable/disable checking instances' status with SSM.
+func WithAwsEc2DiscovererSsmStatusCheck(enabled bool) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) { ec2d.ssmStatusCheckEnabled = enabled }
 }
 
 // WithAwsEc2DiscovererDiscovererId is the AwsEc2DiscovererOption
@@ -104,6 +114,7 @@ func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2
 		cfg: cfg,
 
 		discovererId:             defaultAwsEc2DiscovererDiscovererId,
+		ssmStatusCheckEnabled:    defaultAwsEc2SsmStatusCheckEnabled,
 		getAccountIdTimeout:      defaultAwsEc2DiscovererGetAccountIdTimeout,
 		describeInstancesTimeout: defaultAwsEc2DiscovererDescribeInstancesTimeout,
 		includedInstanceStates:   defaultAwsEc2DiscovererIncludedInstanceStates,
@@ -125,6 +136,14 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	if err != nil {
 		result.AddError(fmt.Errorf("failed to get AWS account ID from AWS configuration: %w", err))
 		return result
+	}
+
+	ssmInstanceStatuses := make(map[string]bool)
+	if ec2d.ssmStatusCheckEnabled {
+		if err := ec2d.collectSsmInstanceStatuses(ctx, ssmInstanceStatuses); err != nil {
+			result.AddError(fmt.Errorf("failed to collect SSM instance statuses: %w", err))
+			return result
+		}
 	}
 
 	// describe ec2 instances
@@ -179,6 +198,18 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 			for _, t := range instance.Tags {
 				tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
 			}
+			ssmInstanceStatus := discovery.Ec2InstanceSsmStatusNotChecked
+			if ec2d.ssmStatusCheckEnabled {
+				if online, associated := ssmInstanceStatuses[aws.ToString(instance.InstanceId)]; associated {
+					if online {
+						ssmInstanceStatus = discovery.Ec2InstanceSsmStatusOnline
+					} else {
+						ssmInstanceStatus = discovery.Ec2InstanceSsmStatusOffline
+					}
+				} else {
+					ssmInstanceStatus = discovery.Ec2InstanceSsmStatusNotAssociated
+				}
+			}
 			ec2InstanceDetails := &discovery.AwsEc2InstanceDetails{
 				AwsBaseDetails:   awsBaseDetails,
 				Tags:             tags,
@@ -193,6 +224,8 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 				PublicIpAddress:  aws.ToString(instance.PublicIpAddress),
 				InstanceType:     string(instance.InstanceType),
 				InstanceState:    string(pointer.ValueOrZero(instance.State).Name),
+
+				InstanceSsmStatus: ssmInstanceStatus,
 			}
 			result.AddResources(discovery.Resource{
 				ResourceType:          discovery.ResourceTypeAwsEc2Instance,
@@ -202,4 +235,50 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
+}
+
+func (ec2d *AwsEc2Discoverer) collectSsmInstanceStatuses(
+	ctx context.Context,
+	statuses map[string]bool,
+) error {
+	paginator := ssm.NewDescribeInstanceInformationPaginator(
+		ssm.NewFromConfig(ec2d.cfg),
+		&ssm.DescribeInstanceInformationInput{},
+	)
+	for paginator.HasMorePages() {
+		err := processSsmInstanceInformationPage(
+			ctx,
+			statuses,
+			paginator,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to process SSM instance information page: %v", err)
+		}
+	}
+	return nil
+}
+
+func processSsmInstanceInformationPage(
+	ctx context.Context,
+	statuses map[string]bool,
+	paginator *ssm.DescribeInstanceInformationPaginator,
+) error {
+	describeInstanceInformationOutput, err := paginator.NextPage(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get next page: %v", err)
+	}
+	for _, instanceInfo := range describeInstanceInformationOutput.InstanceInformationList {
+		// note: presense in the response implies that the SSM api knows
+		// about this instance (so it is associated with SSM). We add it
+		// to the map with an offline status (false).
+		statuses[aws.ToString(instanceInfo.InstanceId)] = false
+
+		onlinePingStatus := instanceInfo.PingStatus == ssmtypes.PingStatusOnline
+		timeSinceLastPing := time.Since(aws.ToTime(instanceInfo.LastPingDateTime))
+
+		if onlinePingStatus && timeSinceLastPing <= 10*time.Minute {
+			statuses[aws.ToString(instanceInfo.InstanceId)] = true // mark online
+		}
+	}
+	return nil
 }
