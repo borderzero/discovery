@@ -44,9 +44,9 @@ func WithDockerDiscovererListContainersTimeout(timeout time.Duration) DockerDisc
 	return func(dd *DockerDiscoverer) { dd.containerListTimeout = timeout }
 }
 
-// WithDockerDiscovererInclusionInstanceTags is the DockerDiscovererOption
+// WithDockerDiscovererInclusionContainerLabels is the DockerDiscovererOption
 // to set the inclusion labels filter for containers to include in results.
-func WithDockerDiscovererInclusionInstanceTags(labels map[string][]string) DockerDiscovererOption {
+func WithDockerDiscovererInclusionContainerLabels(labels map[string][]string) DockerDiscovererOption {
 	return func(dd *DockerDiscoverer) { dd.inclusionContainerLabels = labels }
 }
 

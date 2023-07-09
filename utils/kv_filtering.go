@@ -28,7 +28,7 @@ func KVMatchesFilters(
 			if kvMatchesFilter(
 				key,
 				value,
-				inclusion,
+				exclusion,
 			) {
 				excluded = true
 				break
