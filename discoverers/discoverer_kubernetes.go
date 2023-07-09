@@ -146,7 +146,11 @@ func (k8d *KubernetesDiscoverer) Discover(ctx context.Context) *discovery.Result
 		// process services
 		for _, service := range services.Items {
 			// ignore services that don't satisfy label conditions
-			if !evaluateKubernetesLabels(service.Labels, k8d.inclusionServiceLabels, k8d.exclusionServiceLabels) {
+			if !utils.KVMatchesFilters(
+				service.Labels,
+				k8d.inclusionServiceLabels,
+				k8d.exclusionServiceLabels,
+			) {
 				continue
 			}
 
@@ -190,33 +194,4 @@ func portSpecToDetails(port v1.ServicePort) discovery.KubernetesServicePort {
 		TargetPort:  port.TargetPort.String(),
 		NodePort:    port.NodePort,
 	}
-}
-
-func evaluateKubernetesLabels(
-	labels map[string]string,
-	inclusion map[string][]string,
-	exclusion map[string][]string,
-) bool {
-	included := (inclusion == nil)
-	excluded := false
-
-	if inclusion != nil {
-		for key, value := range labels {
-			if utils.TagMatchesFilter(key, value, inclusion) {
-				included = true
-				break
-			}
-		}
-	}
-
-	if exclusion != nil {
-		for key, value := range labels {
-			if utils.TagMatchesFilter(key, value, exclusion) {
-				excluded = true
-				break
-			}
-		}
-	}
-
-	return included && !excluded
 }

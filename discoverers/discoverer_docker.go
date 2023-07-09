@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/borderzero/discovery"
+	"github.com/borderzero/discovery/utils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -21,6 +22,9 @@ const (
 type DockerDiscoverer struct {
 	discovererId         string
 	containerListTimeout time.Duration
+
+	inclusionContainerLabels map[string][]string
+	exclusionContainerLabels map[string][]string
 }
 
 // ensure DockerDiscoverer implements discovery.Discoverer at compile-time.
@@ -31,24 +35,34 @@ type DockerDiscovererOption func(*DockerDiscoverer)
 
 // WithDockerDiscovererDiscovererId is the DockerDiscovererOption to set a non default discoverer id.
 func WithDockerDiscovererDiscovererId(discovererId string) DockerDiscovererOption {
-	return func(dd *DockerDiscoverer) {
-		dd.discovererId = discovererId
-	}
+	return func(dd *DockerDiscoverer) { dd.discovererId = discovererId }
 }
 
 // WithDockerDiscovererListContainersTimeout is the DockerDiscovererOption
 // to set a non default timeout for listing containers with the docker daemon.
 func WithDockerDiscovererListContainersTimeout(timeout time.Duration) DockerDiscovererOption {
-	return func(dd *DockerDiscoverer) {
-		dd.containerListTimeout = timeout
-	}
+	return func(dd *DockerDiscoverer) { dd.containerListTimeout = timeout }
+}
+
+// WithDockerDiscovererInclusionInstanceTags is the DockerDiscovererOption
+// to set the inclusion labels filter for containers to include in results.
+func WithDockerDiscovererInclusionInstanceTags(labels map[string][]string) DockerDiscovererOption {
+	return func(dd *DockerDiscoverer) { dd.inclusionContainerLabels = labels }
+}
+
+// WithDockerDiscovererExclusionContainerLabels is the DockerDiscovererOption
+// to set the exclusion labels filter for containers to exclude in results.
+func WithDockerDiscovererExclusionContainerLabels(labels map[string][]string) DockerDiscovererOption {
+	return func(dd *DockerDiscoverer) { dd.exclusionContainerLabels = labels }
 }
 
 // NewDockerDiscoverer returns a new DockerDiscoverer, initialized with the given options.
 func NewDockerDiscoverer(opts ...DockerDiscovererOption) *DockerDiscoverer {
 	dd := &DockerDiscoverer{
-		discovererId:         defaultDockerDiscovererId,
-		containerListTimeout: defaultContainerListTimeout,
+		discovererId:             defaultDockerDiscovererId,
+		containerListTimeout:     defaultContainerListTimeout,
+		inclusionContainerLabels: nil,
+		exclusionContainerLabels: nil,
 	}
 	for _, opt := range opts {
 		opt(dd)
@@ -77,6 +91,13 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	for _, container := range containers {
+		if !utils.KVMatchesFilters(
+			container.Labels,
+			dd.inclusionContainerLabels,
+			dd.exclusionContainerLabels,
+		) {
+			continue
+		}
 		portBindings := map[string]string{}
 		for _, p := range container.Ports {
 			if p.IP != "" {
@@ -85,7 +106,6 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 				portBindings[key] = value
 			}
 		}
-
 		localContainer := &discovery.LocalDockerContainerDetails{
 			ContainerId:  container.ID,
 			Image:        container.Image,
@@ -94,7 +114,6 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			PortBindings: portBindings,
 			Labels:       container.Labels,
 		}
-
 		result.AddResources(discovery.Resource{
 			ResourceType:                discovery.ResourceTypeLocalDockerContainer,
 			LocalDockerContainerDetails: localContainer,

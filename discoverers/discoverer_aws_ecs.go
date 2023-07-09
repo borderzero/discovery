@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/borderzero/border0-go/lib/types/set"
+	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
 )
@@ -137,8 +138,13 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			continue
 		}
 		// ignore clusters that don't satisfy tag conditions
-		if !evaluateEcsClusterTags(
-			cluster.Tags,
+		if !utils.KVMatchesFilters(
+			slice.Map(
+				cluster.Tags,
+				func(tag types.Tag) (string, string) {
+					return aws.ToString(tag.Key), aws.ToString(tag.Value)
+				},
+			),
 			ecsd.inclusionClusterTags,
 			ecsd.exclusionClusterTags,
 		) {
@@ -172,41 +178,4 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
-}
-
-func evaluateEcsClusterTags(
-	tags []types.Tag,
-	inclusion map[string][]string,
-	exclusion map[string][]string,
-) bool {
-	included := (inclusion == nil)
-	excluded := false
-
-	if inclusion != nil {
-		for _, tag := range tags {
-			if utils.TagMatchesFilter(
-				aws.ToString(tag.Key),
-				aws.ToString(tag.Value),
-				inclusion,
-			) {
-				included = true
-				break
-			}
-		}
-	}
-
-	if exclusion != nil {
-		for _, tag := range tags {
-			if utils.TagMatchesFilter(
-				aws.ToString(tag.Key),
-				aws.ToString(tag.Value),
-				exclusion,
-			) {
-				excluded = true
-				break
-			}
-		}
-	}
-
-	return included && !excluded
 }

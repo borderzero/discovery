@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/borderzero/border0-go/lib/types/set"
+	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
 )
@@ -149,8 +150,13 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 				continue
 			}
 			// ignore instances that don't satisfy tag conditions
-			if !evaluateEc2InstanceTags(
-				instance.Tags,
+			if !utils.KVMatchesFilters(
+				slice.Map(
+					instance.Tags,
+					func(tag types.Tag) (string, string) {
+						return aws.ToString(tag.Key), aws.ToString(tag.Value)
+					},
+				),
 				ec2d.inclusionInstanceTags,
 				ec2d.exclusionInstanceTags,
 			) {
@@ -195,41 +201,4 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
-}
-
-func evaluateEc2InstanceTags(
-	tags []types.Tag,
-	inclusion map[string][]string,
-	exclusion map[string][]string,
-) bool {
-	included := (inclusion == nil)
-	excluded := false
-
-	if inclusion != nil {
-		for _, tag := range tags {
-			if utils.TagMatchesFilter(
-				aws.ToString(tag.Key),
-				aws.ToString(tag.Value),
-				inclusion,
-			) {
-				included = true
-				break
-			}
-		}
-	}
-
-	if exclusion != nil {
-		for _, tag := range tags {
-			if utils.TagMatchesFilter(
-				aws.ToString(tag.Key),
-				aws.ToString(tag.Value),
-				exclusion,
-			) {
-				excluded = true
-				break
-			}
-		}
-	}
-
-	return included && !excluded
 }
