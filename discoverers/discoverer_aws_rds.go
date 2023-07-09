@@ -129,8 +129,13 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			continue
 		}
 		// ignore rds db instances that don't satisfy tag conditions
-		if !evaluateRdsInstanceTags(
-			instance.TagList,
+		if !utils.KVMatchesFilters(
+			slice.Map(
+				instance.TagList,
+				func(tag types.Tag) (string, string) {
+					return aws.ToString(tag.Key), aws.ToString(tag.Value)
+				},
+			),
 			rdsd.inclusionInstanceTags,
 			rdsd.exclusionInstanceTags,
 		) {
@@ -175,41 +180,4 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	return result
-}
-
-func evaluateRdsInstanceTags(
-	tags []types.Tag,
-	inclusion map[string][]string,
-	exclusion map[string][]string,
-) bool {
-	included := (inclusion == nil)
-	excluded := false
-
-	if inclusion != nil {
-		for _, tag := range tags {
-			if utils.TagMatchesFilter(
-				aws.ToString(tag.Key),
-				aws.ToString(tag.Value),
-				inclusion,
-			) {
-				included = true
-				break
-			}
-		}
-	}
-
-	if exclusion != nil {
-		for _, tag := range tags {
-			if utils.TagMatchesFilter(
-				aws.ToString(tag.Key),
-				aws.ToString(tag.Value),
-				exclusion,
-			) {
-				excluded = true
-				break
-			}
-		}
-	}
-
-	return included && !excluded
 }
