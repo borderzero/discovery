@@ -2,13 +2,13 @@ package discoverers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/borderzero/border0-go/lib/types/maps"
-	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
 	"github.com/borderzero/discovery/utils"
@@ -19,19 +19,14 @@ const (
 	defaultAwsEcsDiscovererGetAccountIdTimeout = time.Second * 10
 )
 
-var (
-	defaultAwsEcsDiscovererIncludedClusterStatuses = set.New("ACTIVE", "PROVISIONING")
-)
-
 // AwsEcsDiscoverer represents a discoverer for AWS ECS resources.
 type AwsEcsDiscoverer struct {
 	cfg aws.Config
 
-	discovererId            string
-	getAccountIdTimeout     time.Duration
-	includedClusterStatuses set.Set[string]
-	inclusionClusterTags    map[string][]string
-	exclusionClusterTags    map[string][]string
+	discovererId         string
+	getAccountIdTimeout  time.Duration
+	inclusionServiceTags map[string][]string
+	exclusionServiceTags map[string][]string
 }
 
 // ensure AwsEcsDiscoverer implements discovery.Discoverer at compile-time.
@@ -55,27 +50,19 @@ func WithAwsEcsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsEcsDiscov
 	}
 }
 
-// WithAwsEcsDiscovererIncludedClusterStatuses is the AwsEcsDiscovererOption
-// to set a non default list of statuses for clusters to include in results.
-func WithAwsEcsDiscovererIncludedClusterStatuses(statuses ...string) AwsEcsDiscovererOption {
+// WithAwsEcsDiscovererInclusionServiceTags is the AwsEcsDiscovererOption
+// to set the inclusion tags filter for services to include in results.
+func WithAwsEcsDiscovererInclusionServiceTags(tags map[string][]string) AwsEcsDiscovererOption {
 	return func(ecsd *AwsEcsDiscoverer) {
-		ecsd.includedClusterStatuses = set.New(statuses...)
+		ecsd.inclusionServiceTags = tags
 	}
 }
 
-// WithAwsEcsDiscovererInclusionClusterTags is the AwsEcsDiscovererOption
-// to set the inclusion tags filter for clusters to include in results.
-func WithAwsEcsDiscovererInclusionClusterTags(tags map[string][]string) AwsEcsDiscovererOption {
+// WithAwsEcsDiscovererExclusionServiceTags is the AwsEcsDiscovererOption
+// to set the inclusion tags filter for services to exclude in results.
+func WithAwsEcsDiscovererExclusionServiceTags(tags map[string][]string) AwsEcsDiscovererOption {
 	return func(ecsd *AwsEcsDiscoverer) {
-		ecsd.inclusionClusterTags = tags
-	}
-}
-
-// WithAwsEcsDiscovererExclusionClusterTags is the AwsEcsDiscovererOption
-// to set the inclusion tags filter for clusters to exclude in results.
-func WithAwsEcsDiscovererExclusionClusterTags(tags map[string][]string) AwsEcsDiscovererOption {
-	return func(ecsd *AwsEcsDiscoverer) {
-		ecsd.exclusionClusterTags = tags
+		ecsd.exclusionServiceTags = tags
 	}
 }
 
@@ -84,11 +71,10 @@ func NewAwsEcsDiscoverer(cfg aws.Config, opts ...AwsEcsDiscovererOption) *AwsEcs
 	ecsd := &AwsEcsDiscoverer{
 		cfg: cfg,
 
-		discovererId:            defaultAwsEcsDiscovererDiscovererId,
-		getAccountIdTimeout:     defaultAwsEcsDiscovererGetAccountIdTimeout,
-		includedClusterStatuses: defaultAwsEcsDiscovererIncludedClusterStatuses,
-		inclusionClusterTags:    nil,
-		exclusionClusterTags:    nil,
+		discovererId:         defaultAwsEcsDiscovererDiscovererId,
+		getAccountIdTimeout:  defaultAwsEcsDiscovererGetAccountIdTimeout,
+		inclusionServiceTags: nil,
+		exclusionServiceTags: nil,
 	}
 	for _, opt := range opts {
 		opt(ecsd)
@@ -107,75 +93,153 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 		return result
 	}
 
-	// describe ecs clusters
 	ecsClient := ecs.NewFromConfig(ecsd.cfg)
-	// TODO: new context with timeout for list clusters
-	// TODO: use paginator
-	listClustersOutput, err := ecsClient.ListClusters(ctx, &ecs.ListClustersInput{})
-	if err != nil {
-		result.AddErrorf("failed to list ecs clusters: %v", err)
-		return result
-	}
-	// TODO: new context with timeout for describe clusters
-	// TODO: use paginator
-	describeClustersOutput, err := ecsClient.DescribeClusters(ctx, &ecs.DescribeClustersInput{
-		Clusters: listClustersOutput.ClusterArns,
-		Include:  []types.ClusterField{types.ClusterFieldTags},
-	})
-	if err != nil {
-		result.AddErrorf("failed to describe ecs clusters: %v", err)
-		return result
-	}
-
-	// filter and build resources
-	for _, cluster := range describeClustersOutput.Clusters {
-		// ignore clusters with no status
-		if cluster.Status == nil {
-			continue // NOTE: this should emit a warning.
+	paginator := ecs.NewListClustersPaginator(ecsClient, &ecs.ListClustersInput{})
+	for paginator.HasMorePages() {
+		ok := ecsd.processEcsListClustersPage(
+			ctx,
+			ecsClient,
+			paginator,
+			result,
+			awsAccountId,
+		)
+		if !ok {
+			break
 		}
-		// ignore clusters with un-included cluster states
-		if !ecsd.includedClusterStatuses.Has(aws.ToString(cluster.Status)) {
-			continue
-		}
-		// ignore clusters that don't satisfy tag conditions
-		if !maps.MatchesFilters(
-			slice.Map(
-				cluster.Tags,
-				func(tag types.Tag) (string, string) {
-					return aws.ToString(tag.Key), aws.ToString(tag.Value)
-				},
-			),
-			ecsd.inclusionClusterTags,
-			ecsd.exclusionClusterTags,
-		) {
-			continue
-		}
-		// build resource
-		awsBaseDetails := discovery.AwsBaseDetails{
-			AwsRegion:    ecsd.cfg.Region,
-			AwsAccountId: awsAccountId,
-			AwsArn:       aws.ToString(cluster.ClusterArn),
-		}
-		// Note: might need to make a few api calls for each cluster...
-		// - DescribeServices
-		// - DescribeTasks
-		// - DescribeContainerInstances
-		tags := map[string]string{}
-		for _, t := range cluster.Tags {
-			tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
-		}
-		ecsClusterDetails := &discovery.AwsEcsClusterDetails{
-			AwsBaseDetails: awsBaseDetails,
-			Tags:           tags,
-			ClusterName:    aws.ToString(cluster.ClusterName),
-			ClusterStatus:  aws.ToString(cluster.Status),
-			// TODO: add details
-		}
-		result.AddResources(discovery.Resource{
-			ResourceType:         discovery.ResourceTypeAwsEcsCluster,
-			AwsEcsClusterDetails: ecsClusterDetails,
-		})
 	}
 
 	return result
+}
+
+func (ecsd *AwsEcsDiscoverer) processEcsListClustersPage(
+	ctx context.Context,
+	ecsClient *ecs.Client,
+	listClustersPaginator *ecs.ListClustersPaginator,
+	result *discovery.Result,
+	awsAccountId string,
+) bool {
+	listClustersOutput, err := listClustersPaginator.NextPage(ctx)
+	if err != nil {
+		result.AddErrorf("failed to list ecs clusters: %v", err)
+		return false
+	}
+	if len(listClustersOutput.ClusterArns) == 0 {
+		return true
+	}
+
+	for _, clusterArn := range listClustersOutput.ClusterArns {
+		paginator := ecs.NewListServicesPaginator(
+			ecsClient,
+			&ecs.ListServicesInput{
+				Cluster: aws.String(clusterArn),
+
+				// ecs describe services allows only describing 10 at a
+				// time so we get services in batches of (at most) 10
+				MaxResults: aws.Int32(10),
+			},
+		)
+		for paginator.HasMorePages() {
+			ok := ecsd.processEcsListServicesPage(
+				ctx,
+				ecsClient,
+				clusterArn,
+				paginator,
+				result,
+				awsAccountId,
+			)
+			if !ok {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func (ecsd *AwsEcsDiscoverer) processEcsListServicesPage(
+	ctx context.Context,
+	ecsClient *ecs.Client,
+	clusterArn string,
+	listServicesPaginator *ecs.ListServicesPaginator,
+	result *discovery.Result,
+	awsAccountId string,
+) bool {
+	listServicesOutput, err := listServicesPaginator.NextPage(ctx)
+	if err != nil {
+		result.AddErrorf("failed to list ecs services: %v", err)
+		return false
+	}
+	if len(listServicesOutput.ServiceArns) == 0 {
+		return true
+	}
+
+	describeServicesOutput, err := ecsClient.DescribeServices(
+		ctx,
+		&ecs.DescribeServicesInput{
+			Cluster:  aws.String(clusterArn),
+			Services: listServicesOutput.ServiceArns,
+			Include:  []types.ServiceField{types.ServiceFieldTags},
+		},
+	)
+	if err != nil {
+		result.AddErrorf("failed to describe ecs services: %v", err)
+		return false
+	}
+
+	for _, failure := range describeServicesOutput.Failures {
+		result.AddWarning(fmt.Sprintf("received a failure when describing ecs services: %v", failure))
+	}
+	for _, service := range describeServicesOutput.Services {
+		ecsd.processEcsService(
+			ctx,
+			&service,
+			result,
+			awsAccountId,
+		)
+	}
+
+	return true
+}
+
+func (ecsd *AwsEcsDiscoverer) processEcsService(
+	ctx context.Context,
+	service *types.Service,
+	result *discovery.Result,
+	awsAccountId string,
+) {
+	// ignore services that don't satisfy tag conditions
+	if !maps.MatchesFilters(
+		slice.Map(
+			service.Tags,
+			func(tag types.Tag) (string, string) {
+				return aws.ToString(tag.Key), aws.ToString(tag.Value)
+			},
+		),
+		ecsd.inclusionServiceTags,
+		ecsd.exclusionServiceTags,
+	) {
+		return
+	}
+	// build resource
+	awsBaseDetails := discovery.AwsBaseDetails{
+		AwsRegion:    ecsd.cfg.Region,
+		AwsAccountId: awsAccountId,
+		AwsArn:       aws.ToString(service.ServiceArn),
+	}
+	tags := map[string]string{}
+	for _, t := range service.Tags {
+		tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
+	}
+	ecsServiceDetails := &discovery.AwsEcsServiceDetails{
+		AwsBaseDetails:       awsBaseDetails,
+		ClusterArn:           aws.ToString(service.ClusterArn),
+		ServiceName:          aws.ToString(service.ServiceName),
+		TaskDefinition:       aws.ToString(service.TaskDefinition),
+		EnableExecuteCommand: service.EnableExecuteCommand,
+		Tags:                 tags,
+	}
+	result.AddResources(discovery.Resource{
+		ResourceType:         discovery.ResourceTypeAwsEcsService,
+		AwsEcsServiceDetails: ecsServiceDetails,
+	})
 }

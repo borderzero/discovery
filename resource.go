@@ -4,8 +4,8 @@ const (
 	// ResourceTypeAwsEc2Instance is the resource type for AWS EC2 instances.
 	ResourceTypeAwsEc2Instance = "aws_ec2_instance"
 
-	// ResourceTypeAwsEcsCluster is the resource type for AWS ECS clusters.
-	ResourceTypeAwsEcsCluster = "aws_ecs_cluster"
+	// ResourceTypeAwsEcsService is the resource type for AWS ECS services.
+	ResourceTypeAwsEcsService = "aws_ecs_service"
 
 	// ResourceTypeAwsRdsInstnace is the resource type for AWS RDS instances.
 	ResourceTypeAwsRdsInstance = "aws_rds_instance"
@@ -84,17 +84,16 @@ type AwsEc2InstanceDetails struct {
 	// add any new fields as needed here
 }
 
-// AwsEcsClusterDetails represents the details of a discovered AWS ECS cluster.
-type AwsEcsClusterDetails struct {
+// AwsEcsServiceDetails represents the details of a discovered AWS ECS service.
+type AwsEcsServiceDetails struct {
 	AwsBaseDetails // extends
 
 	Tags map[string]string `json:"tags"`
 
-	ClusterName   string   `json:"cluster_name"`
-	ClusterStatus string   `json:"cluster_status"`
-	Services      []string `json:"services"`
-	Tasks         []string `json:"tasks"`
-	Containers    []string `json:"containers"`
+	ServiceName          string `json:"service_name"`
+	ClusterArn           string `json:"cluster_arn"`
+	TaskDefinition       string `json:"task_definition"`
+	EnableExecuteCommand bool   `json:"enable_execute_command"`
 
 	// add any new fields as needed here
 }
@@ -212,7 +211,7 @@ type Resource struct {
 	ResourceType string `json:"resource_type"`
 
 	AwsEc2InstanceDetails          *AwsEc2InstanceDetails          `json:"aws_ec2_instance_details,omitempty"`
-	AwsEcsClusterDetails           *AwsEcsClusterDetails           `json:"aws_ecs_cluster_details,omitempty"`
+	AwsEcsServiceDetails           *AwsEcsServiceDetails           `json:"aws_ecs_service_details,omitempty"`
 	AwsRdsInstanceDetails          *AwsRdsInstanceDetails          `json:"aws_rds_instance_details,omitempty"`
 	AwsSsmTargetDetails            *AwsSsmTargetDetails            `json:"aws_ssm_target_details,omitempty"`
 	KubernetesServiceDetails       *KubernetesServiceDetails       `json:"kubernetes_service_details,omitempty"`
