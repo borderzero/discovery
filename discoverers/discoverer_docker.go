@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/discovery"
-	"github.com/borderzero/discovery/utils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -91,7 +91,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	}
 
 	for _, container := range containers {
-		if !utils.KVMatchesFilters(
+		if !maps.MatchesFilters(
 			container.Labels,
 			dd.inclusionContainerLabels,
 			dd.exclusionContainerLabels,
