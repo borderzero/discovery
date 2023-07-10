@@ -9,7 +9,6 @@ import (
 	"github.com/borderzero/border0-go/lib/types/pointer"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
-	"github.com/borderzero/discovery/utils"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -146,7 +145,7 @@ func (k8d *KubernetesDiscoverer) Discover(ctx context.Context) *discovery.Result
 		// process services
 		for _, service := range services.Items {
 			// ignore services that don't satisfy label conditions
-			if !utils.KVMatchesFilters(
+			if !maps.MatchesFilters(
 				service.Labels,
 				k8d.inclusionServiceLabels,
 				k8d.exclusionServiceLabels,

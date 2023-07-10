@@ -62,8 +62,8 @@ github.com/aws/aws-sdk-go-v2/service/sts v1.19.2 h1:XFJ2Z6sNUUcAz9poj+245DMkrHE4
 github.com/aws/aws-sdk-go-v2/service/sts v1.19.2/go.mod h1:dp0yLPsLBOi++WTxzCjA/oZqi6NPIhoR+uF7GeMU9eg=
 github.com/aws/smithy-go v1.13.5 h1:hgz0X/DX0dGqTYpGALqXJoRKRj5oQ7150i5FdTePzO8=
 github.com/aws/smithy-go v1.13.5/go.mod h1:Tg+OJXh4MB2R/uN61Ko2f6hTZwB/ZYGOtib8J3gBHzA=
-github.com/borderzero/border0-go v0.1.8 h1:NjX6egDqXTEjJtEXanF0K10z9GOszFwOvUGHoweBDYg=
-github.com/borderzero/border0-go v0.1.8/go.mod h1:A4NGE3GI2f5NMJcWRuNDCTY6UBegTw4F2l1Q4wdULGY=
+github.com/borderzero/border0-go v0.1.10 h1:wbppV4hL/q/HIfabnmv0paAngznp6mjXlzCEz2OxbM0=
+github.com/borderzero/border0-go v0.1.10/go.mod h1:A4NGE3GI2f5NMJcWRuNDCTY6UBegTw4F2l1Q4wdULGY=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=

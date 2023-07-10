@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
@@ -138,7 +139,7 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			continue
 		}
 		// ignore clusters that don't satisfy tag conditions
-		if !utils.KVMatchesFilters(
+		if !maps.MatchesFilters(
 			slice.Map(
 				cluster.Tags,
 				func(tag types.Tag) (string, string) {

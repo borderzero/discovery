@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/rds/types"
+	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/border0-go/lib/types/set"
 	"github.com/borderzero/border0-go/lib/types/slice"
 	"github.com/borderzero/discovery"
@@ -129,7 +130,7 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			continue
 		}
 		// ignore rds db instances that don't satisfy tag conditions
-		if !utils.KVMatchesFilters(
+		if !maps.MatchesFilters(
 			slice.Map(
 				instance.TagList,
 				func(tag types.Tag) (string, string) {
