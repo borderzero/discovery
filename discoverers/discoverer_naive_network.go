@@ -126,7 +126,7 @@ func (nd *NaiveNetworkDiscoverer) Discover(ctx context.Context) *discovery.Resul
 	for _, target := range nd.targets {
 		ips, err := targetToIps(target)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to get IPs for target: %v", err))
+			result.AddErrorf("failed to get IPs for target: %v", err)
 			continue
 		}
 

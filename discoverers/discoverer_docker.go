@@ -77,7 +77,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to create Docker client: %w", err))
+		result.AddErrorf("failed to create Docker client: %v", err)
 		return result
 	}
 
@@ -86,7 +86,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 
 	containers, err := cli.ContainerList(containerListCtx, types.ContainerListOptions{})
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to list Docker containers: %w", err))
+		result.AddErrorf("failed to list Docker containers: %v", err)
 		return result
 	}
 

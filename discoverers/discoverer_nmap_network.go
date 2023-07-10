@@ -152,14 +152,14 @@ func (nd *NmapNetworkDiscoverer) Discover(ctx context.Context) *discovery.Result
 	// equivalent to `nmap -p ${PORTS} ${TARGETS[@]} ${OPT_FLAGS[@]}`
 	scanner, err := nmap.NewScanner(opts...)
 	if err != nil {
-		result.AddError(fmt.Errorf("unable to create nmap scanner: %v", err))
+		result.AddErrorf("unable to create nmap scanner: %v", err)
 		return result
 	}
 
 	// FIXME: support warnings in discoverer (second return argument of scanner.Run())?
 	scannerResults, _, err := scanner.Run()
 	if err != nil {
-		result.AddError(fmt.Errorf("unable to run nmap scan: %v", err))
+		result.AddErrorf("unable to run nmap scan: %v", err)
 		return result
 	}
 

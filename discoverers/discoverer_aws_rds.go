@@ -2,7 +2,6 @@ package discoverers
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -106,7 +105,7 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 
 	awsAccountId, err := utils.AwsAccountIdFromConfig(ctx, rdsd.cfg, rdsd.getAccountIdTimeout)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to get AWS account ID from AWS configuration: %w", err))
+		result.AddErrorf("failed to get AWS account ID from AWS configuration: %v", err)
 		return result
 	}
 
@@ -115,7 +114,7 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	// TODO: new context with timeout for describe instances
 	describeDBInstancesOutput, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to describe rds instances: %w", err))
+		result.AddErrorf("failed to describe rds instances: %v", err)
 		return result
 	}
 

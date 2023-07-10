@@ -33,6 +33,18 @@ const (
 
 	// ResourceTypeNetworkSshServer is the resource type for network-reachable SSH servers.
 	ResourceTypeNetworkSshServer = "network_ssh_server"
+
+	// Ec2InstanceSsmStatusOnline represents the SSM status of an EC2 instance that is associated and online.
+	Ec2InstanceSsmStatusOnline = "online"
+
+	// Ec2InstanceSsmStatusOffline represents the SSM status of an EC2 instance that is associated and offline.
+	Ec2InstanceSsmStatusOffline = "offline"
+
+	// Ec2InstanceSsmStatusNotChecked represents the SSM status of an EC2 instance that is not checked.
+	Ec2InstanceSsmStatusNotChecked = "not_checked"
+
+	// Ec2InstanceSsmStatusNotAssociated represents the SSM status of an EC2 instance that is not associated.
+	Ec2InstanceSsmStatusNotAssociated = "not_associated"
 )
 
 // AwsBaseDetails represents the details of a discovered generic AWS resource.
@@ -66,6 +78,8 @@ type AwsEc2InstanceDetails struct {
 	PublicIpAddress  string `json:"public_ip_address"`
 	InstanceType     string `json:"instance_type"`
 	InstanceState    string `json:"instance_state"`
+
+	InstanceSsmStatus string `json:"ssm_status"`
 
 	// add any new fields as needed here
 }

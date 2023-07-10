@@ -2,7 +2,6 @@ package discoverers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -104,7 +103,7 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 
 	awsAccountId, err := utils.AwsAccountIdFromConfig(ctx, ecsd.cfg, ecsd.getAccountIdTimeout)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to get AWS account ID from AWS configuration: %w", err))
+		result.AddErrorf("failed to get AWS account ID from AWS configuration: %v", err)
 		return result
 	}
 
@@ -114,7 +113,7 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	// TODO: use paginator
 	listClustersOutput, err := ecsClient.ListClusters(ctx, &ecs.ListClustersInput{})
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to list ecs clusters: %w", err))
+		result.AddErrorf("failed to list ecs clusters: %v", err)
 		return result
 	}
 	// TODO: new context with timeout for describe clusters
@@ -124,7 +123,7 @@ func (ecsd *AwsEcsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 		Include:  []types.ClusterField{types.ClusterFieldTags},
 	})
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to describe ecs clusters: %w", err))
+		result.AddErrorf("failed to describe ecs clusters: %v", err)
 		return result
 	}
 
