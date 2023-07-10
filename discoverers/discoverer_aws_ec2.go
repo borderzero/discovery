@@ -21,6 +21,7 @@ import (
 const (
 	defaultAwsEc2DiscovererDiscovererId             = "aws_ec2_discoverer"
 	defaultAwsEc2SsmStatusCheckEnabled              = true
+	defaultAwsEc2SsmStatusCheckRequired             = false
 	defaultAwsEc2DiscovererGetAccountIdTimeout      = time.Second * 10
 	defaultAwsEc2DiscovererDescribeInstancesTimeout = time.Second * 10
 )
@@ -42,6 +43,7 @@ type AwsEc2Discoverer struct {
 
 	discovererId             string
 	ssmStatusCheckEnabled    bool
+	ssmStatusCheckRequired   bool
 	getAccountIdTimeout      time.Duration
 	describeInstancesTimeout time.Duration
 	includedInstanceStates   set.Set[types.InstanceStateName]
@@ -64,8 +66,11 @@ func WithAwsEc2DiscovererDiscovererId(discovererId string) AwsEc2DiscovererOptio
 
 // WithAwsEc2DiscovererSsmStatusCheck is the AwsEc2DiscovererOption
 // to enable/disable checking instances' status with SSM.
-func WithAwsEc2DiscovererSsmStatusCheck(enabled bool) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) { ec2d.ssmStatusCheckEnabled = enabled }
+func WithAwsEc2DiscovererSsmStatusCheck(enabled, required bool) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.ssmStatusCheckEnabled = enabled
+		ec2d.ssmStatusCheckRequired = required
+	}
 }
 
 // WithAwsEc2DiscovererDiscovererId is the AwsEc2DiscovererOption
@@ -115,6 +120,7 @@ func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2
 
 		discovererId:             defaultAwsEc2DiscovererDiscovererId,
 		ssmStatusCheckEnabled:    defaultAwsEc2SsmStatusCheckEnabled,
+		ssmStatusCheckRequired:   defaultAwsEc2SsmStatusCheckRequired,
 		getAccountIdTimeout:      defaultAwsEc2DiscovererGetAccountIdTimeout,
 		describeInstancesTimeout: defaultAwsEc2DiscovererDescribeInstancesTimeout,
 		includedInstanceStates:   defaultAwsEc2DiscovererIncludedInstanceStates,
@@ -134,15 +140,22 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 
 	awsAccountId, err := utils.AwsAccountIdFromConfig(ctx, ec2d.cfg, ec2d.getAccountIdTimeout)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to get AWS account ID from AWS configuration: %w", err))
+		result.AddErrorf("failed to get AWS account ID from AWS configuration: %v", err)
 		return result
 	}
 
 	ssmInstanceStatuses := make(map[string]bool)
+	ssmInstanceCheckSucceeded := false
 	if ec2d.ssmStatusCheckEnabled {
 		if err := ec2d.collectSsmInstanceStatuses(ctx, ssmInstanceStatuses); err != nil {
-			result.AddError(fmt.Errorf("failed to collect SSM instance statuses: %w", err))
-			return result
+			if ec2d.ssmStatusCheckRequired {
+				result.AddErrorf("failed to collect SSM instance statuses: %v", err)
+				return result
+			} else {
+				result.AddWarningf("failed to collect SSM instance statuses: %v", err)
+			}
+		} else {
+			ssmInstanceCheckSucceeded = true
 		}
 	}
 
@@ -154,7 +167,7 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 	ec2Client := ec2.NewFromConfig(ec2d.cfg)
 	describeInstancesOutput, err := ec2Client.DescribeInstances(describeInstancesCtx, &ec2.DescribeInstancesInput{})
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to describe ec2 instances: %w", err))
+		result.AddErrorf("failed to describe ec2 instances: %v", err)
 		return result
 	}
 
@@ -163,7 +176,11 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 		for _, instance := range reservation.Instances {
 			// ignore instances with no state
 			if instance.State == nil {
-				continue // NOTE: this should emit a warning.
+				result.AddWarningf(
+					"received an instance (id %s) with a nil value for state",
+					aws.ToString(instance.InstanceId),
+				)
+				continue
 			}
 			// ignore instances with un-included instance states
 			if !ec2d.includedInstanceStates.Has(instance.State.Name) {
@@ -199,7 +216,7 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 				tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
 			}
 			ssmInstanceStatus := discovery.Ec2InstanceSsmStatusNotChecked
-			if ec2d.ssmStatusCheckEnabled {
+			if ec2d.ssmStatusCheckEnabled && ssmInstanceCheckSucceeded {
 				if online, associated := ssmInstanceStatuses[aws.ToString(instance.InstanceId)]; associated {
 					if online {
 						ssmInstanceStatus = discovery.Ec2InstanceSsmStatusOnline

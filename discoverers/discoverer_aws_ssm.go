@@ -90,7 +90,7 @@ func (ssmd *AwsSsmDiscoverer) Discover(ctx context.Context) *discovery.Result {
 
 	awsAccountId, err := utils.AwsAccountIdFromConfig(ctx, ssmd.cfg, ssmd.getAccountIdTimeout)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to get AWS account ID from AWS configuration: %w", err))
+		result.AddErrorf("failed to get AWS account ID from AWS configuration: %v", err)
 		return result
 	}
 
@@ -113,7 +113,7 @@ func (ssmd *AwsSsmDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			awsAccountId,
 		)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to get instance information from SSM: %w", err))
+			result.AddErrorf("failed to get instance information from SSM: %v", err)
 			return result
 		}
 		result.AddResources(resources...)

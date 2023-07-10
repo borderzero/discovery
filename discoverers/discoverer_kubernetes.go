@@ -2,7 +2,6 @@ package discoverers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/borderzero/border0-go/lib/types/maps"
@@ -119,14 +118,14 @@ func (k8d *KubernetesDiscoverer) Discover(ctx context.Context) *discovery.Result
 	// to use the inCluster config (which k8s injects into pod environments)
 	config, err := clientcmd.BuildConfigFromFlags(k8d.masterUrl, k8d.kubeconfigPath)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to get k8s config: %v", err))
+		result.AddErrorf("failed to get k8s config: %v", err)
 		return result
 	}
 
 	// create a new clientset which includes all the k8s APIs
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		result.AddError(fmt.Errorf("failed to create new client set for k8s config: %v", err))
+		result.AddErrorf("failed to create new client set for k8s config: %v", err)
 		return result
 	}
 
@@ -139,7 +138,7 @@ func (k8d *KubernetesDiscoverer) Discover(ctx context.Context) *discovery.Result
 		// make k8s api call to list services
 		services, err := clientset.CoreV1().Services(k8d.namespace).List(ctx, opts)
 		if err != nil {
-			result.AddError(fmt.Errorf("failed to list services via k8s api: %v", err))
+			result.AddErrorf("failed to list services via k8s api: %v", err)
 			return result
 		}
 		// process services

@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -17,8 +18,10 @@ type Result struct {
 	sync.Mutex // inherit lock behaviour
 
 	Resources []Resource `json:"resources"`
-	Errors    []string   `json:"errors"`
 	Metadata  Metadata   `json:"metadata"`
+
+	Errors   []string `json:"errors"`
+	Warnings []string `json:"warnings"`
 }
 
 // NewResult returns a new Result object with
@@ -26,11 +29,12 @@ type Result struct {
 func NewResult(discovererId string) *Result {
 	return &Result{
 		Resources: []Resource{},
-		Errors:    []string{},
 		Metadata: Metadata{
 			DiscovererId: discovererId,
 			StartedAt:    time.Now(),
 		},
+		Errors:   []string{},
+		Warnings: []string{},
 	}
 }
 
@@ -51,9 +55,27 @@ func (r *Result) AddResources(resources ...Resource) {
 }
 
 // AddError adds an error to a result
-func (r *Result) AddError(err error) {
+func (r *Result) AddError(err string) {
 	r.Lock()
 	defer r.Unlock()
 
-	r.Errors = append(r.Errors, err.Error())
+	r.Errors = append(r.Errors, err)
+}
+
+// AddErrorf adds a formatted error to a result
+func (r *Result) AddErrorf(template string, args ...any) {
+	r.AddError(fmt.Sprintf(template, args...))
+}
+
+// AddWarning adds an warning to a result
+func (r *Result) AddWarning(warn string) {
+	r.Lock()
+	defer r.Unlock()
+
+	r.Warnings = append(r.Warnings, warn)
+}
+
+// AddWarningf adds a formatted warning to a result
+func (r *Result) AddWarningf(template string, args ...any) {
+	r.AddWarning(fmt.Sprintf(template, args...))
 }
