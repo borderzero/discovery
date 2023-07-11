@@ -56,8 +56,8 @@ type AwsBaseDetails struct {
 
 // NetworkBaseDetails represents the details of a discovered generic service on the network.
 type NetworkBaseDetails struct {
-	Addresses []string `json:"addresses"`
 	HostNames []string `json:"hostnames,omitempty"`
+	IpAddress string   `json:"ip_address"`
 	Port      string   `json:"port"`
 }
 
@@ -116,16 +116,6 @@ type AwsRdsInstanceDetails struct {
 	// add any new fields as needed here
 }
 
-// AwsSsmTargetDetails represents the details of a discovered AWS SSM target.
-type AwsSsmTargetDetails struct {
-	AwsBaseDetails // extends
-
-	InstanceId string `json:"instance_id"`
-	PingStatus string `json:"ping_status"`
-
-	// add any new fields as needed here
-}
-
 // KubernetesServicePort represents the details of a port for a kubernetes service.
 type KubernetesServicePort struct {
 	Name        string  `json:"name,omitempty"`
@@ -153,9 +143,9 @@ type KubernetesServiceDetails struct {
 	// add any new fields as needed here
 }
 
-// LocalDockerContainerDetails represents the details of a
+// DockerContainerDetails represents the details of a
 // discovered container managed by the local Docker daemon.
-type LocalDockerContainerDetails struct {
+type DockerContainerDetails struct {
 	ContainerId  string            `json:"container_id"`
 	Status       string            `json:"status"`
 	Image        string            `json:"image"`
@@ -213,9 +203,8 @@ type Resource struct {
 	AwsEc2InstanceDetails          *AwsEc2InstanceDetails          `json:"aws_ec2_instance_details,omitempty"`
 	AwsEcsServiceDetails           *AwsEcsServiceDetails           `json:"aws_ecs_service_details,omitempty"`
 	AwsRdsInstanceDetails          *AwsRdsInstanceDetails          `json:"aws_rds_instance_details,omitempty"`
-	AwsSsmTargetDetails            *AwsSsmTargetDetails            `json:"aws_ssm_target_details,omitempty"`
 	KubernetesServiceDetails       *KubernetesServiceDetails       `json:"kubernetes_service_details,omitempty"`
-	LocalDockerContainerDetails    *LocalDockerContainerDetails    `json:"local_docker_container_details,omitempty"`
+	DockerContainerDetails         *DockerContainerDetails         `json:"docker_container_details,omitempty"`
 	NetworkHttpServerDetails       *NetworkHttpServerDetails       `json:"network_http_server_details,omitempty"`
 	NetworkHttpsServerDetails      *NetworkHttpsServerDetails      `json:"network_https_server_details,omitempty"`
 	NetworkMysqlServerDetails      *NetworkMysqlServerDetails      `json:"network_mysql_server_details,omitempty"`

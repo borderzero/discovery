@@ -1,10 +1,9 @@
 package discoverers
 
-// FIXME: needs rate limiting options
-
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,19 +13,21 @@ import (
 	"time"
 
 	"github.com/borderzero/discovery"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
-	defaultNaiveNetworkDiscovererDiscovererId = "naive_network_discoverer"
-	defaultNaiveNetworkDiscovererScanTimeout  = time.Second * 120
+	defaultNetworkDiscovererDiscovererId   = "network_discoverer"
+	defaultNetworkDiscovererScanTimeout    = time.Second * 120
+	defaultNetworkDiscovererMaxConcurrency = 1000
 )
 
 var (
-	defaultNaiveNetworkDiscovererTargets = []string{
-		"192.168.1.0/24",
+	defaultNetworkDiscovererTargets = []string{
+		"192.168.13.0/24",
 	}
 
-	defaultNaiveNetworkDiscovererPorts = []string{
+	defaultNetworkDiscovererPorts = []string{
 		"22",   // default ssh port
 		"80",   // default http port
 		"443",  // default https port
@@ -54,63 +55,63 @@ var (
 	}
 )
 
-// NaiveNetworkDiscoverer represents a discoverer for network-reachable resources
+// NetworkDiscoverer represents a discoverer for network-reachable resources
 // with a very rudimentary check using TCP probes. This check can (and will) give
 // false positives or negatives. For a more thorough service detection, you would
 // need a more comprehensive set of checks.
 // Nmap for example uses a combination of probes and a large database of well known
 // service banners to identify the service running on a particular port.
-type NaiveNetworkDiscoverer struct {
-	discovererId string
-	scanTimeout  time.Duration
-	targets      []string
-	ports        []string
+type NetworkDiscoverer struct {
+	discovererId   string
+	scanTimeout    time.Duration
+	maxConcurrency int64
+	targets        []string
+	ports          []string
 }
 
-// ensure NaiveNetworkDiscoverer implements discovery.Discoverer at compile-time.
-var _ discovery.Discoverer = (*NaiveNetworkDiscoverer)(nil)
+// ensure NetworkDiscoverer implements discovery.Discoverer at compile-time.
+var _ discovery.Discoverer = (*NetworkDiscoverer)(nil)
 
-// NaiveNetworkDiscovererOption represents a configuration option for a NaiveNetworkDiscoverer.
-type NaiveNetworkDiscovererOption func(*NaiveNetworkDiscoverer)
+// NetworkDiscovererOption represents a configuration option for a NetworkDiscoverer.
+type NetworkDiscovererOption func(*NetworkDiscoverer)
 
-// WithNaiveNetworkDiscovererDiscovererId is the NaiveNetworkDiscovererOption to set a non default discoverer id.
-func WithNaiveNetworkDiscovererDiscovererId(discovererId string) NaiveNetworkDiscovererOption {
-	return func(nd *NaiveNetworkDiscoverer) {
-		nd.discovererId = discovererId
-	}
+// WithNetworkDiscovererDiscovererId is the NetworkDiscovererOption to set a non default discoverer id.
+func WithNetworkDiscovererDiscovererId(discovererId string) NetworkDiscovererOption {
+	return func(nd *NetworkDiscoverer) { nd.discovererId = discovererId }
 }
 
-// WithNaiveNetworkDiscovererScanTimeout is the NaiveNetworkDiscovererOption
+// WithNetworkDiscovererScanTimeout is the NetworkDiscovererOption
 // to set a non default timeout for scanning the network.
-func WithNaiveNetworkDiscovererScanTimeout(timeout time.Duration) NaiveNetworkDiscovererOption {
-	return func(nd *NaiveNetworkDiscoverer) {
-		nd.scanTimeout = timeout
-	}
+func WithNetworkDiscovererScanTimeout(timeout time.Duration) NetworkDiscovererOption {
+	return func(nd *NetworkDiscoverer) { nd.scanTimeout = timeout }
 }
 
-// WithNaiveNetworkDiscovererTargets is the NaiveNetworkDiscovererOption
+// WithNetworkDiscovererMaxConcurrency is the NetworkDiscovererOption
+// to set a non default value for the maximum concurrency (port scans in-flight).
+func WithNetworkDiscovererMaxConcurrency(concurrency int64) NetworkDiscovererOption {
+	return func(nd *NetworkDiscoverer) { nd.maxConcurrency = concurrency }
+}
+
+// WithNetworkDiscovererTargets is the NetworkDiscovererOption
 // to set non default targets (IPs or DNS names) for discovery.
-func WithNaiveNetworkDiscovererTargets(targets ...string) NaiveNetworkDiscovererOption {
-	return func(nd *NaiveNetworkDiscoverer) {
-		nd.targets = targets
-	}
+func WithNetworkDiscovererTargets(targets ...string) NetworkDiscovererOption {
+	return func(nd *NetworkDiscoverer) { nd.targets = targets }
 }
 
-// WithNaiveNetworkDiscovererPorts is the NaiveNetworkDiscovererOption
+// WithNetworkDiscovererPorts is the NetworkDiscovererOption
 // to set non default target ports for discovery.
-func WithNaiveNetworkDiscovererPorts(ports ...string) NaiveNetworkDiscovererOption {
-	return func(nd *NaiveNetworkDiscoverer) {
-		nd.ports = ports
-	}
+func WithNetworkDiscovererPorts(ports ...string) NetworkDiscovererOption {
+	return func(nd *NetworkDiscoverer) { nd.ports = ports }
 }
 
-// NewNaiveNetworkDiscoverer returns a new NaiveNetworkDiscoverer, initialized with the given options.
-func NewNaiveNetworkDiscoverer(opts ...NaiveNetworkDiscovererOption) *NaiveNetworkDiscoverer {
-	nd := &NaiveNetworkDiscoverer{
-		discovererId: defaultNaiveNetworkDiscovererDiscovererId,
-		scanTimeout:  defaultNaiveNetworkDiscovererScanTimeout,
-		targets:      defaultNaiveNetworkDiscovererTargets,
-		ports:        defaultNaiveNetworkDiscovererPorts,
+// NewNetworkDiscoverer returns a new NetworkDiscoverer, initialized with the given options.
+func NewNetworkDiscoverer(opts ...NetworkDiscovererOption) *NetworkDiscoverer {
+	nd := &NetworkDiscoverer{
+		discovererId:   defaultNetworkDiscovererDiscovererId,
+		scanTimeout:    defaultNetworkDiscovererScanTimeout,
+		maxConcurrency: defaultNetworkDiscovererMaxConcurrency,
+		targets:        defaultNetworkDiscovererTargets,
+		ports:          defaultNetworkDiscovererPorts,
 	}
 	for _, opt := range opts {
 		opt(nd)
@@ -118,10 +119,12 @@ func NewNaiveNetworkDiscoverer(opts ...NaiveNetworkDiscovererOption) *NaiveNetwo
 	return nd
 }
 
-// Discover runs the NaiveNetworkDiscoverer.
-func (nd *NaiveNetworkDiscoverer) Discover(ctx context.Context) *discovery.Result {
+// Discover runs the NetworkDiscoverer.
+func (nd *NetworkDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	result := discovery.NewResult(nd.discovererId)
 	defer result.Done()
+
+	sem := semaphore.NewWeighted(nd.maxConcurrency)
 
 	for _, target := range nd.targets {
 		ips, err := targetToIps(target)
@@ -134,66 +137,66 @@ func (nd *NaiveNetworkDiscoverer) Discover(ctx context.Context) *discovery.Resul
 		for _, ip := range ips {
 			for _, port := range nd.ports {
 				wg.Add(1)
+
 				go func(ip, port string) {
 					defer wg.Done()
+
+					if err := sem.Acquire(ctx, 1); err != nil {
+						if !errors.Is(err, context.Canceled) {
+							result.AddErrorf("failed to acquire semaphore: %v", err)
+						}
+						return
+					}
+					defer sem.Release(1)
+
 					svc, ok := scanPort(ctx, ip, port)
 					if ok {
 						// best effort dns name lookup
 						hostnames, _ := net.LookupAddr(ip)
+						if hostnames == nil {
+							hostnames = []string{}
+						}
+
+						networkBaseDetails := discovery.NetworkBaseDetails{
+							HostNames: hostnames,
+							IpAddress: ip,
+							Port:      port,
+						}
+
 						switch svc {
 						case "http":
 							result.AddResources(discovery.Resource{
 								ResourceType: discovery.ResourceTypeNetworkHttpServer,
 								NetworkHttpServerDetails: &discovery.NetworkHttpServerDetails{
-									NetworkBaseDetails: discovery.NetworkBaseDetails{
-										Addresses: []string{ip},
-										HostNames: hostnames,
-										Port:      port,
-									},
+									NetworkBaseDetails: networkBaseDetails,
 								},
 							})
 						case "https":
 							result.AddResources(discovery.Resource{
 								ResourceType: discovery.ResourceTypeNetworkHttpsServer,
 								NetworkHttpsServerDetails: &discovery.NetworkHttpsServerDetails{
-									NetworkBaseDetails: discovery.NetworkBaseDetails{
-										Addresses: []string{ip},
-										HostNames: hostnames,
-										Port:      port,
-									},
+									NetworkBaseDetails: networkBaseDetails,
 								},
 							})
 						case "mysql":
 							result.AddResources(discovery.Resource{
 								ResourceType: discovery.ResourceTypeNetworkMysqlServer,
 								NetworkMysqlServerDetails: &discovery.NetworkMysqlServerDetails{
-									NetworkBaseDetails: discovery.NetworkBaseDetails{
-										Addresses: []string{ip},
-										HostNames: hostnames,
-										Port:      port,
-									},
+									NetworkBaseDetails: networkBaseDetails,
 								},
 							})
 						case "postgresql":
 							result.AddResources(discovery.Resource{
 								ResourceType: discovery.ResourceTypeNetworkPostgresqlServer,
 								NetworkPostgresqlServerDetails: &discovery.NetworkPostgresqlServerDetails{
-									NetworkBaseDetails: discovery.NetworkBaseDetails{
-										Addresses: []string{ip},
-										HostNames: hostnames,
-										Port:      port,
-									},
+									NetworkBaseDetails: networkBaseDetails,
 								},
 							})
 						case "ssh":
 							result.AddResources(discovery.Resource{
 								ResourceType: discovery.ResourceTypeNetworkSshServer,
 								NetworkSshServerDetails: &discovery.NetworkSshServerDetails{
-									NetworkBaseDetails: discovery.NetworkBaseDetails{
-										Addresses: []string{ip},
-										HostNames: hostnames,
-										Port:      port,
-									},
+									NetworkBaseDetails: networkBaseDetails,
 								},
 							})
 						}

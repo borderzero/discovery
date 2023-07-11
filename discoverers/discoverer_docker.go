@@ -106,7 +106,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 				portBindings[key] = value
 			}
 		}
-		localContainer := &discovery.LocalDockerContainerDetails{
+		containerDetails := &discovery.DockerContainerDetails{
 			ContainerId:  container.ID,
 			Image:        container.Image,
 			Names:        container.Names,
@@ -115,8 +115,8 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			Labels:       container.Labels,
 		}
 		result.AddResources(discovery.Resource{
-			ResourceType:                discovery.ResourceTypeLocalDockerContainer,
-			LocalDockerContainerDetails: localContainer,
+			ResourceType:           discovery.ResourceTypeLocalDockerContainer,
+			DockerContainerDetails: containerDetails,
 		})
 	}
 

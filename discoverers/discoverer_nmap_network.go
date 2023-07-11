@@ -15,6 +15,7 @@ const (
 	defaultNmapNetworkDiscovererScanTimeout  = time.Second * 120
 
 	nmapDiscoveredPortServiceNameHttp       = "http"
+	nmapDiscoveredPortServiceNameHttpProxy  = "http-proxy"
 	nmapDiscoveredPortServiceNameHttps      = "https"
 	nmapDiscoveredPortServiceNameSsh        = "ssh"
 	nmapDiscoveredPortServiceNameMysql      = "mysql"
@@ -180,14 +181,20 @@ func (nd *NmapNetworkDiscoverer) Discover(ctx context.Context) *discovery.Result
 				continue
 			}
 
+			ipAddress := ""
+			if len(host.Addresses) > 0 {
+				ipAddress = host.Addresses[0].Addr
+			}
+
 			networkBaseDetails := discovery.NetworkBaseDetails{
-				Addresses: slice.Transform(host.Addresses, func(a nmap.Address) string { return a.Addr }),
 				HostNames: slice.Transform(host.Hostnames, func(h nmap.Hostname) string { return h.String() }),
+				IpAddress: ipAddress,
 				Port:      fmt.Sprintf("%d", port.ID),
 			}
 
-			// http
-			if port.Service.Name == nmapDiscoveredPortServiceNameHttp {
+			// http (or http-proxy)
+			if port.Service.Name == nmapDiscoveredPortServiceNameHttp ||
+				port.Service.Name == nmapDiscoveredPortServiceNameHttpProxy {
 				result.AddResources(discovery.Resource{
 					ResourceType: discovery.ResourceTypeNetworkHttpServer,
 					NetworkHttpServerDetails: &discovery.NetworkHttpServerDetails{
