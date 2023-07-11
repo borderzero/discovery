@@ -15,7 +15,9 @@ func main() {
 
 	engine := engines.NewOneOffEngine(
 		engines.OneOffEngineOptionWithDiscoverers(
-			discoverers.NewNetworkDiscoverer( /* ... opts ... */ ),
+			discoverers.NewNetworkDiscoverer(
+				discoverers.WithNetworkDiscovererTargets("en0"),
+			),
 		),
 	)
 

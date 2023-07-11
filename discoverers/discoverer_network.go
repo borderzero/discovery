@@ -24,7 +24,7 @@ const (
 
 var (
 	defaultNetworkDiscovererTargets = []string{
-		"192.168.13.0/24",
+		"192.168.1.0/24",
 	}
 
 	defaultNetworkDiscovererPorts = []string{
@@ -308,6 +308,13 @@ func targetToIps(target string) ([]string, error) {
 	if isIP(target) {
 		return []string{target}, nil
 	}
+	if isInterface(target) {
+		ips, err := interfaceToIPs(target)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get IPs from interface: %v", err)
+		}
+		return ips, nil
+	}
 	if isHostname(target) {
 		ips, err := hostnameToIps(target)
 		if err != nil {
@@ -315,7 +322,7 @@ func targetToIps(target string) ([]string, error) {
 		}
 		return ips, nil
 	}
-	return nil, fmt.Errorf("target \"%s\" is not a valid CIDR, IP range, IP, nor hostname", target)
+	return nil, fmt.Errorf("target \"%s\" is not a valid CIDR, IP range, IP, network interface, nor hostname", target)
 }
 
 func isIP(target string) bool {
@@ -332,6 +339,43 @@ func isCidr(target string) bool {
 
 func isHostname(target string) bool {
 	return regexp.MustCompile(`^[a-zA-Z0-9-.]+$`).MatchString(target)
+}
+
+func isInterface(target string) bool {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return false
+	}
+	for _, inter := range interfaces {
+		if inter.Name == target {
+			return true
+		}
+	}
+	return false
+}
+
+func interfaceToIPs(target string) ([]string, error) {
+	iface, err := net.InterfaceByName(target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get interface by name: %v", err)
+	}
+	addresses, err := iface.Addrs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get addresses for interface %s: %v", iface.Name, err)
+	}
+
+	ips := []string{}
+	for _, addr := range addresses {
+		ipnet, ok := addr.(*net.IPNet)
+		if ok && ipnet.IP.To4() != nil {
+			netIps, err := cidrToIPs(ipnet.String())
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert interface cidr to list of ips: %v", err)
+			}
+			ips = append(ips, netIps...)
+		}
+	}
+	return ips, nil
 }
 
 func hostnameToIps(hostname string) ([]string, error) {
