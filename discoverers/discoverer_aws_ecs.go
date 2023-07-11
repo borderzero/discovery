@@ -37,33 +37,25 @@ type AwsEcsDiscovererOption func(*AwsEcsDiscoverer)
 
 // WithAwsEcsDiscovererDiscovererId is the AwsEcsDiscovererOption to set a non default discoverer id.
 func WithAwsEcsDiscovererDiscovererId(discovererId string) AwsEcsDiscovererOption {
-	return func(ecsd *AwsEcsDiscoverer) {
-		ecsd.discovererId = discovererId
-	}
+	return func(ecsd *AwsEcsDiscoverer) { ecsd.discovererId = discovererId }
 }
 
 // WithAwsEcsDiscovererGetAccountIdTimeout is the AwsEcsDiscovererOption
 // to set a non default timeout for getting the aws account id.
 func WithAwsEcsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsEcsDiscovererOption {
-	return func(ecsd *AwsEcsDiscoverer) {
-		ecsd.getAccountIdTimeout = timeout
-	}
+	return func(ecsd *AwsEcsDiscoverer) { ecsd.getAccountIdTimeout = timeout }
 }
 
 // WithAwsEcsDiscovererInclusionServiceTags is the AwsEcsDiscovererOption
 // to set the inclusion tags filter for services to include in results.
 func WithAwsEcsDiscovererInclusionServiceTags(tags map[string][]string) AwsEcsDiscovererOption {
-	return func(ecsd *AwsEcsDiscoverer) {
-		ecsd.inclusionServiceTags = tags
-	}
+	return func(ecsd *AwsEcsDiscoverer) { ecsd.inclusionServiceTags = tags }
 }
 
 // WithAwsEcsDiscovererExclusionServiceTags is the AwsEcsDiscovererOption
 // to set the inclusion tags filter for services to exclude in results.
 func WithAwsEcsDiscovererExclusionServiceTags(tags map[string][]string) AwsEcsDiscovererOption {
-	return func(ecsd *AwsEcsDiscoverer) {
-		ecsd.exclusionServiceTags = tags
-	}
+	return func(ecsd *AwsEcsDiscoverer) { ecsd.exclusionServiceTags = tags }
 }
 
 // NewAwsEcsDiscoverer returns a new AwsEcsDiscoverer.
