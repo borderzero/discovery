@@ -16,8 +16,8 @@ const (
 	// ResourceTypeKubernetesService is the resource type for kubernetes services.
 	ResourceTypeKubernetesService = "kubernetes_service"
 
-	// ResourceTypeLocalDockerContainer is the resource type for containers managed by the local Docker daemon.
-	ResourceTypeLocalDockerContainer = "local_docker_container"
+	// ResourceTypeDockerContainer is the resource type for containers managed by a Docker daemon.
+	ResourceTypeDockerContainer = "docker_container"
 
 	// ResourceTypeNetworkHttpServer is the resource type for network-reachable HTTP servers.
 	ResourceTypeNetworkHttpServer = "network_http_server"
@@ -144,7 +144,7 @@ type KubernetesServiceDetails struct {
 }
 
 // DockerContainerDetails represents the details of a
-// discovered container managed by the local Docker daemon.
+// discovered container managed by a Docker daemon.
 type DockerContainerDetails struct {
 	ContainerId  string            `json:"container_id"`
 	Status       string            `json:"status"`

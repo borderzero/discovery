@@ -115,7 +115,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 			Labels:       container.Labels,
 		}
 		result.AddResources(discovery.Resource{
-			ResourceType:           discovery.ResourceTypeLocalDockerContainer,
+			ResourceType:           discovery.ResourceTypeDockerContainer,
 			DockerContainerDetails: containerDetails,
 		})
 	}

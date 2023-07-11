@@ -43,42 +43,32 @@ type AwsRdsDiscovererOption func(*AwsRdsDiscoverer)
 
 // WithAwsEcsDiscovererDiscovererId is the AwsRdsDiscovererOption to set a non default discoverer id.
 func WithAwsRdsDiscovererDiscovererId(discovererId string) AwsRdsDiscovererOption {
-	return func(rdsd *AwsRdsDiscoverer) {
-		rdsd.discovererId = discovererId
-	}
+	return func(rdsd *AwsRdsDiscoverer) { rdsd.discovererId = discovererId }
 }
 
 // WithAwsRdsDiscovererGetAccountIdTimeout is the AwsRdsDiscovererOption
 // to set a non default timeout for getting the aws account id.
 func WithAwsRdsDiscovererGetAccountIdTimeout(timeout time.Duration) AwsRdsDiscovererOption {
-	return func(rdsd *AwsRdsDiscoverer) {
-		rdsd.getAccountIdTimeout = timeout
-	}
+	return func(rdsd *AwsRdsDiscoverer) { rdsd.getAccountIdTimeout = timeout }
 }
 
 // WithAwsRdsDiscovererIncludedInstanceStatuses is the AwsRdsDiscovererOption
 // to set a non default list of statuses for instances to include in results.
 func WithAwsRdsDiscovererIncludedInstanceStatuses(statuses ...string) AwsRdsDiscovererOption {
-	return func(rdsd *AwsRdsDiscoverer) {
-		lowercased := slice.Transform(statuses, func(s string) string { return strings.ToLower(s) })
-		rdsd.includedInstanceStatuses = set.New(lowercased...)
-	}
+	lowercased := slice.Transform(statuses, func(s string) string { return strings.ToLower(s) })
+	return func(rdsd *AwsRdsDiscoverer) { rdsd.includedInstanceStatuses = set.New(lowercased...) }
 }
 
 // WithAwsRdsDiscovererInclusionInstanceTags is the AwsRdsDiscovererOption
 // to set the inclusion tags filter for instances to include in results.
 func WithAwsRdsDiscovererInclusionInstanceTags(tags map[string][]string) AwsRdsDiscovererOption {
-	return func(rdsd *AwsRdsDiscoverer) {
-		rdsd.inclusionInstanceTags = tags
-	}
+	return func(rdsd *AwsRdsDiscoverer) { rdsd.inclusionInstanceTags = tags }
 }
 
 // WithAwsRdsDiscovererExclusionInstanceTags is the AwsRdsDiscovererOption
 // to set the exclusion tags filter for instances to exclude in results.
 func WithAwsRdsDiscovererExclusionInstanceTags(tags map[string][]string) AwsRdsDiscovererOption {
-	return func(rdsd *AwsRdsDiscoverer) {
-		rdsd.exclusionInstanceTags = tags
-	}
+	return func(rdsd *AwsRdsDiscoverer) { rdsd.exclusionInstanceTags = tags }
 }
 
 // NewAwsRdsDiscoverer returns a new AwsRdsDiscoverer, initialized with the given options.

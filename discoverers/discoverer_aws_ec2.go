@@ -59,9 +59,7 @@ type AwsEc2DiscovererOption func(*AwsEc2Discoverer)
 
 // WithAwsEc2DiscovererDiscovererId is the AwsEc2DiscovererOption to set a non default discoverer id.
 func WithAwsEc2DiscovererDiscovererId(discovererId string) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.discovererId = discovererId
-	}
+	return func(ec2d *AwsEc2Discoverer) { ec2d.discovererId = discovererId }
 }
 
 // WithAwsEc2DiscovererSsmStatusCheck is the AwsEc2DiscovererOption
@@ -76,41 +74,31 @@ func WithAwsEc2DiscovererSsmStatusCheck(enabled, required bool) AwsEc2Discoverer
 // WithAwsEc2DiscovererDiscovererId is the AwsEc2DiscovererOption
 // to set a non default timeout for getting the aws account id.
 func WithAwsEc2DiscovererGetAccountIdTimeout(timeout time.Duration) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.getAccountIdTimeout = timeout
-	}
+	return func(ec2d *AwsEc2Discoverer) { ec2d.getAccountIdTimeout = timeout }
 }
 
 // WithAwsEc2DiscovererDescribeInstancesTimeout is the AwsEc2DiscovererOption
 // to set a non default timeout for the describe instnaces api call.
 func WithAwsEc2DiscovererDescribeInstancesTimeout(timeout time.Duration) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.describeInstancesTimeout = timeout
-	}
+	return func(ec2d *AwsEc2Discoverer) { ec2d.describeInstancesTimeout = timeout }
 }
 
 // WithAwsEc2DiscovererIncludedInstanceStates is the AwsEc2DiscovererOption
 // to set a non default list of states for instances to include in results.
 func WithAwsEc2DiscovererIncludedInstanceStates(states ...types.InstanceStateName) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.includedInstanceStates = set.New(states...)
-	}
+	return func(ec2d *AwsEc2Discoverer) { ec2d.includedInstanceStates = set.New(states...) }
 }
 
 // WithAwsEc2DiscovererInclusionInstanceTags is the AwsEc2DiscovererOption
 // to set the inclusion tags filter for instances to include in results.
 func WithAwsEc2DiscovererInclusionInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.inclusionInstanceTags = tags
-	}
+	return func(ec2d *AwsEc2Discoverer) { ec2d.inclusionInstanceTags = tags }
 }
 
 // WithAwsEc2DiscovererExclusionInstanceTags is the AwsEc2DiscovererOption
 // to set the exclusion tags filter for instances to exclude in results.
 func WithAwsEc2DiscovererExclusionInstanceTags(tags map[string][]string) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.exclusionInstanceTags = tags
-	}
+	return func(ec2d *AwsEc2Discoverer) { ec2d.exclusionInstanceTags = tags }
 }
 
 // NewEngine returns a new AwsEc2Discoverer, initialized with the given options.

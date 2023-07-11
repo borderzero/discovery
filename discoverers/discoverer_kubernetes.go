@@ -47,49 +47,37 @@ type KubernetesDiscovererOption func(*KubernetesDiscoverer)
 
 // WithKubernetesDiscovererDiscovererId is the KubernetesDiscovererOption to set a non default discoverer id.
 func WithKubernetesDiscovererDiscovererId(discovererId string) KubernetesDiscovererOption {
-	return func(k8d *KubernetesDiscoverer) {
-		k8d.discovererId = discovererId
-	}
+	return func(k8d *KubernetesDiscoverer) { k8d.discovererId = discovererId }
 }
 
 // WithKubernetesDiscovererMasterUrl is the KubernetesDiscovererOption to run
 // the discovery against a remote kubernetes cluster with a given master URL.
 func WithKubernetesDiscovererMasterUrl(masterUrl string) KubernetesDiscovererOption {
-	return func(k8d *KubernetesDiscoverer) {
-		k8d.masterUrl = masterUrl
-	}
+	return func(k8d *KubernetesDiscoverer) { k8d.masterUrl = masterUrl }
 }
 
 // WithKubernetesDiscovererKubeconfigPath is the KubernetesDiscovererOption to run
 // the discovery against a remote kubernetes cluster with a given kubeconfig.
 func WithKubernetesDiscovererKubeconfigPath(kubeconfigPath string) KubernetesDiscovererOption {
-	return func(k8d *KubernetesDiscoverer) {
-		k8d.kubeconfigPath = kubeconfigPath
-	}
+	return func(k8d *KubernetesDiscoverer) { k8d.kubeconfigPath = kubeconfigPath }
 }
 
 // WithKubernetesDiscovererNamespace is the KubernetesDiscovererOption
 // to run the discovery against a given kubernetes resources namespace.
 func WithKubernetesDiscovererNamespace(namespace string) KubernetesDiscovererOption {
-	return func(k8d *KubernetesDiscoverer) {
-		k8d.namespace = namespace
-	}
+	return func(k8d *KubernetesDiscoverer) { k8d.namespace = namespace }
 }
 
 // WithKubernetesDiscovererInclusionServiceLabels is the KubernetesDiscovererOption
 // to set the inclusion labels filter for services to include in results.
 func WithKubernetesDiscovererInclusionServiceLabels(labels map[string][]string) KubernetesDiscovererOption {
-	return func(k8d *KubernetesDiscoverer) {
-		k8d.inclusionServiceLabels = labels
-	}
+	return func(k8d *KubernetesDiscoverer) { k8d.inclusionServiceLabels = labels }
 }
 
 // WithKubernetesDiscovererExclusionServiceLabels is the KubernetesDiscovererOption
 // to set the exclusion labels filter for services to exclude in results.
 func WithKubernetesDiscovererExclusionServiceLabels(labels map[string][]string) KubernetesDiscovererOption {
-	return func(k8d *KubernetesDiscoverer) {
-		k8d.exclusionServiceLabels = labels
-	}
+	return func(k8d *KubernetesDiscoverer) { k8d.exclusionServiceLabels = labels }
 }
 
 // NewKubernetesDiscoverer returns a new KubernetesDiscoverer, initialized with the given options.
