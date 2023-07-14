@@ -24,7 +24,7 @@ func AwsAccountIdFromConfig(
 
 	getCallerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		return "", fmt.Errorf("failed to AWS account ID via the AWS STS API: %w", err)
+		return "", fmt.Errorf("failed to get AWS account ID via the AWS STS API: %w", err)
 	}
 
 	awsAccountId := aws.ToString(getCallerIdentityOutput.Account)
