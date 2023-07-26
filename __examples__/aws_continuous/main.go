@@ -36,10 +36,6 @@ func main() {
 			discoverers.NewAwsRdsDiscoverer(cfg),
 			engines.WithInitialInterval(time.Second*2),
 		),
-		engines.WithDiscoverer(
-			discoverers.NewAwsSsmDiscoverer(cfg),
-			engines.WithInitialInterval(time.Second*2),
-		),
 	)
 
 	results := make(chan *discovery.Result, 10)

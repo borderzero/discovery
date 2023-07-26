@@ -81,6 +81,11 @@ type AwsEc2InstanceDetails struct {
 
 	InstanceSsmStatus string `json:"ssm_status"`
 
+	PrivateDnsNameReachable   *bool `json:"private_dns_name_reachable,omitempty"`
+	PrivateIpAddressReachable *bool `json:"private_ip_address_reachable,omitempty"`
+	PublicDnsNameReachable    *bool `json:"public_dns_name_reachable,omitempty"`
+	PublicIpAddressReachable  *bool `json:"public_ip_address_reachable,omitempty"`
+
 	// add any new fields as needed here
 }
 

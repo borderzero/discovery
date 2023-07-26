@@ -33,7 +33,6 @@ func main() {
 			),
 			discoverers.NewAwsEcsDiscoverer(cfg),
 			discoverers.NewAwsRdsDiscoverer(cfg),
-			discoverers.NewAwsSsmDiscoverer(cfg),
 		),
 	)
 

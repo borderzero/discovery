@@ -3,6 +3,7 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -24,6 +25,8 @@ const (
 	defaultAwsEc2SsmStatusCheckRequired             = false
 	defaultAwsEc2DiscovererGetAccountIdTimeout      = time.Second * 10
 	defaultAwsEc2DiscovererDescribeInstancesTimeout = time.Second * 10
+	defaultAwsEc2ReachabilityCheckEnabled           = true
+	defaultAwsEc2ReachabilityRequired               = false
 )
 
 var (
@@ -34,6 +37,15 @@ var (
 		types.InstanceStateNameTerminated,
 		types.InstanceStateNameStopping,
 		types.InstanceStateNameStopped,
+	)
+	defaultAwsEc2NetworkReachabilityCheckPorts = set.New(
+		"22",   // default ssh port
+		"80",   // default http port
+		"443",  // default https port
+		"3306", // default mysql port
+		"5432", // default postgresql port
+		"8080", // common http port
+		"8443", // common https port
 	)
 )
 
@@ -49,6 +61,10 @@ type AwsEc2Discoverer struct {
 	includedInstanceStates   set.Set[types.InstanceStateName]
 	inclusionInstanceTags    map[string][]string
 	exclusionInstanceTags    map[string][]string
+
+	networkReachabilityCheckEnabled bool
+	networkReachabilityCheckPorts   set.Set[string]
+	reachabilityRequired            bool
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
@@ -69,6 +85,18 @@ func WithAwsEc2DiscovererSsmStatusCheck(enabled, required bool) AwsEc2Discoverer
 		ec2d.ssmStatusCheckEnabled = enabled
 		ec2d.ssmStatusCheckRequired = required
 	}
+}
+
+// WithAwsEc2DiscovererReachabilityCheck is the AwsEc2DiscovererOption
+// to enable/disable checking instances' reachability via the network.
+func WithAwsEc2DiscovererNetworkReachabilityCheck(enabled bool) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) { ec2d.networkReachabilityCheckEnabled = enabled }
+}
+
+// WithAwsEc2DiscovererReachabilityRequired is the AwsEc2DiscovererOption
+// to exclude instances that are not reachable through any means from results.
+func WithAwsEc2DiscovererReachabilityRequired(required bool) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) { ec2d.reachabilityRequired = required }
 }
 
 // WithAwsEc2DiscovererDiscovererId is the AwsEc2DiscovererOption
@@ -114,6 +142,10 @@ func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2
 		includedInstanceStates:   defaultAwsEc2DiscovererIncludedInstanceStates,
 		inclusionInstanceTags:    nil,
 		exclusionInstanceTags:    nil,
+
+		networkReachabilityCheckEnabled: defaultAwsEc2ReachabilityCheckEnabled,
+		networkReachabilityCheckPorts:   defaultAwsEc2NetworkReachabilityCheckPorts,
+		reachabilityRequired:            defaultAwsEc2ReachabilityRequired,
 	}
 	for _, opt := range opts {
 		opt(ec2d)
@@ -158,6 +190,10 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 		result.AddErrorf("failed to describe ec2 instances: %v", err)
 		return result
 	}
+
+	// wait group for reachability checks
+	var wg sync.WaitGroup
+	defer wg.Wait()
 
 	// filter and build resources
 	for _, reservation := range describeInstancesOutput.Reservations {
@@ -232,14 +268,134 @@ func (ec2d *AwsEc2Discoverer) Discover(ctx context.Context) *discovery.Result {
 
 				InstanceSsmStatus: ssmInstanceStatus,
 			}
-			result.AddResources(discovery.Resource{
-				ResourceType:          discovery.ResourceTypeAwsEc2Instance,
-				AwsEc2InstanceDetails: ec2InstanceDetails,
-			})
+
+			wg.Add(1)
+			go ec2d.reachabilityCheckAndAdd(ctx, &wg, result, ec2InstanceDetails)
 		}
 	}
 
 	return result
+}
+
+func (ec2d *AwsEc2Discoverer) reachabilityCheckAndAdd(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	result *discovery.Result,
+	ec2Details *discovery.AwsEc2InstanceDetails,
+) {
+	defer wg.Done()
+
+	if ec2d.networkReachabilityCheckEnabled {
+		var testswg sync.WaitGroup
+
+		if ec2Details.PrivateDnsName != "" {
+			testswg.Add(1)
+			go func() {
+				defer testswg.Done()
+				ec2Details.PrivateDnsNameReachable =
+					pointer.To(ec2d.reachabilityCheck(
+						ctx,
+						result,
+						ec2Details.PrivateDnsName,
+					))
+			}()
+		}
+
+		if ec2Details.PrivateIpAddress != "" {
+			testswg.Add(1)
+			go func() {
+				defer testswg.Done()
+				ec2Details.PrivateIpAddressReachable =
+					pointer.To(ec2d.reachabilityCheck(
+						ctx,
+						result,
+						ec2Details.PrivateIpAddress,
+					))
+			}()
+		}
+
+		if ec2Details.PublicDnsName != "" {
+			testswg.Add(1)
+			go func() {
+				defer testswg.Done()
+				ec2Details.PublicDnsNameReachable =
+					pointer.To(ec2d.reachabilityCheck(
+						ctx,
+						result,
+						ec2Details.PublicDnsName,
+					))
+			}()
+		}
+
+		if ec2Details.PublicIpAddress != "" {
+			testswg.Add(1)
+			go func() {
+				defer testswg.Done()
+				ec2Details.PublicIpAddressReachable =
+					pointer.To(ec2d.reachabilityCheck(
+						ctx,
+						result,
+						ec2Details.PublicIpAddress,
+					))
+			}()
+		}
+
+		testswg.Wait()
+	}
+
+	if !ec2d.shouldIncludeInstance(ec2Details) {
+		return
+	}
+
+	result.AddResources(discovery.Resource{
+		ResourceType:          discovery.ResourceTypeAwsEc2Instance,
+		AwsEc2InstanceDetails: ec2Details,
+	})
+}
+
+func (ec2d *AwsEc2Discoverer) shouldIncludeInstance(
+	ec2Details *discovery.AwsEc2InstanceDetails,
+) bool {
+	// include if reachability is not required to include instances
+	if !ec2d.reachabilityRequired {
+		return true
+	}
+
+	// include if reachable via SSM
+	if ec2Details.InstanceSsmStatus == discovery.Ec2InstanceSsmStatusOnline {
+		return true
+	}
+
+	// include if reachable via any private or public dnsname or ip
+	if pointer.ValueOrZero(ec2Details.PublicDnsNameReachable) ||
+		pointer.ValueOrZero(ec2Details.PrivateDnsNameReachable) ||
+		pointer.ValueOrZero(ec2Details.PublicIpAddressReachable) ||
+		pointer.ValueOrZero(ec2Details.PrivateIpAddressReachable) {
+		return true
+	}
+
+	return false
+}
+
+func (ec2d *AwsEc2Discoverer) reachabilityCheck(
+	ctx context.Context,
+	result *discovery.Result,
+	target string,
+) bool {
+	ips, err := targetToIps(target)
+	if err != nil {
+		// result.AddWarningf("failed to get IPs for target %s: %v", target, err)
+		return false
+	}
+	ports := ec2d.networkReachabilityCheckPorts.Slice()
+	for _, ip := range ips {
+		for _, port := range ports {
+			if openPort(ctx, ip, port) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (ec2d *AwsEc2Discoverer) collectSsmInstanceStatuses(
