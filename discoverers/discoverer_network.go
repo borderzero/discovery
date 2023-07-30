@@ -272,7 +272,7 @@ func checkService(ip string, port string) string {
 }
 
 func scanPort(ctx context.Context, ip, port string) (string, bool) {
-	if !openPort(ctx, ip, port) {
+	if !addressReachable(ctx, fmt.Sprintf("%s:%s", ip, port)) {
 		return "", false
 	}
 

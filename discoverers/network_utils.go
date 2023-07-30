@@ -14,9 +14,8 @@ var (
 	reachabilityProbeProtocol = "tcp"
 )
 
-func openPort(ctx context.Context, ip, port string) bool {
+func addressReachable(ctx context.Context, address string) bool {
 	dialer := &net.Dialer{Timeout: reachabilityProbeTimeout}
-	address := fmt.Sprintf("%s:%s", ip, port)
 	conn, err := dialer.DialContext(ctx, reachabilityProbeProtocol, address)
 	if err != nil {
 		return false
