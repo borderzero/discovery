@@ -402,28 +402,35 @@ func (ec2d *AwsEc2Discoverer) reachabilityCheck(
 	result *discovery.Result,
 	target string,
 ) bool {
+	cached, ok := ec2d.networkReachabilityCheckCache.Get(target)
+	if ok {
+		return cached
+	}
+
 	ips, err := targetToIps(target)
 	if err != nil {
-		// result.AddWarningf("failed to get IPs for target %s: %v", target, err)
 		return false
 	}
-	ports := ec2d.networkReachabilityCheckPorts.Slice()
+
 	for _, ip := range ips {
-		for _, port := range ports {
-			address := fmt.Sprintf("%s:%s", ip, port)
-			reachable, present := ec2d.networkReachabilityCheckCache.Get(address)
-			if !present {
-				reachable := addressReachable(ctx, address)
+		for _, port := range ec2d.networkReachabilityCheckPorts.Slice() {
+			reachable := addressReachable(ctx, fmt.Sprintf("%s:%s", ip, port))
+			if reachable {
 				ec2d.networkReachabilityCheckCache.Set(
-					address, reachable,
+					target,
+					true,
 					ec2d.networkReachabilityCheckCacheItemOpts...,
 				)
-			}
-			if reachable {
 				return true
 			}
 		}
 	}
+
+	ec2d.networkReachabilityCheckCache.Set(
+		target,
+		false,
+		ec2d.networkReachabilityCheckCacheItemOpts...,
+	)
 	return false
 }
 
