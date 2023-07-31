@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	cache "github.com/Code-Hex/go-generics-cache"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -26,6 +27,8 @@ const (
 	defaultAwsEc2DiscovererGetAccountIdTimeout      = time.Second * 10
 	defaultAwsEc2DiscovererDescribeInstancesTimeout = time.Second * 10
 	defaultAwsEc2ReachabilityCheckEnabled           = true
+	defaultAwsEc2ReachabilityCheckCacheCleanPeriod  = time.Minute * 30
+	defaultAwsEc2ReachabilityCheckCacheTtl          = time.Second * 5 // barely any caching
 	defaultAwsEc2ReachabilityRequired               = false
 )
 
@@ -62,9 +65,11 @@ type AwsEc2Discoverer struct {
 	inclusionInstanceTags    map[string][]string
 	exclusionInstanceTags    map[string][]string
 
-	networkReachabilityCheckEnabled bool
-	networkReachabilityCheckPorts   set.Set[string]
-	reachabilityRequired            bool
+	networkReachabilityCheckEnabled       bool
+	networkReachabilityCheckPorts         set.Set[string]
+	networkReachabilityCheckCache         *cache.Cache[string, bool]
+	networkReachabilityCheckCacheItemOpts []cache.ItemOption
+	reachabilityRequired                  bool
 }
 
 // ensure AwsEc2Discoverer implements discovery.Discoverer at compile-time.
@@ -97,6 +102,15 @@ func WithAwsEc2DiscovererNetworkReachabilityCheck(enabled bool) AwsEc2Discoverer
 // to exclude instances that are not reachable through any means from results.
 func WithAwsEc2DiscovererReachabilityRequired(required bool) AwsEc2DiscovererOption {
 	return func(ec2d *AwsEc2Discoverer) { ec2d.reachabilityRequired = required }
+}
+
+// WithAwsEc2DiscovererNetworkReachabilityCheckCache is the AwsEc2DiscovererOption
+// to set the network reachability check cache and new item options.
+func WithAwsEc2DiscovererNetworkReachabilityCheckCache(cache *cache.Cache[string, bool], itemOpts ...cache.ItemOption) AwsEc2DiscovererOption {
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.networkReachabilityCheckCache = cache
+		ec2d.networkReachabilityCheckCacheItemOpts = itemOpts
+	}
 }
 
 // WithAwsEc2DiscovererDiscovererId is the AwsEc2DiscovererOption
@@ -145,7 +159,13 @@ func NewAwsEc2Discoverer(cfg aws.Config, opts ...AwsEc2DiscovererOption) *AwsEc2
 
 		networkReachabilityCheckEnabled: defaultAwsEc2ReachabilityCheckEnabled,
 		networkReachabilityCheckPorts:   defaultAwsEc2NetworkReachabilityCheckPorts,
-		reachabilityRequired:            defaultAwsEc2ReachabilityRequired,
+		networkReachabilityCheckCache: cache.New[string, bool](
+			cache.WithJanitorInterval[string, bool](defaultAwsEc2ReachabilityCheckCacheCleanPeriod),
+		),
+		networkReachabilityCheckCacheItemOpts: []cache.ItemOption{
+			cache.WithExpiration(defaultAwsEc2ReachabilityCheckCacheTtl),
+		},
+		reachabilityRequired: defaultAwsEc2ReachabilityRequired,
 	}
 	for _, opt := range opts {
 		opt(ec2d)
@@ -390,7 +410,16 @@ func (ec2d *AwsEc2Discoverer) reachabilityCheck(
 	ports := ec2d.networkReachabilityCheckPorts.Slice()
 	for _, ip := range ips {
 		for _, port := range ports {
-			if openPort(ctx, ip, port) {
+			address := fmt.Sprintf("%s:%s", ip, port)
+			reachable, present := ec2d.networkReachabilityCheckCache.Get(address)
+			if !present {
+				reachable := addressReachable(ctx, address)
+				ec2d.networkReachabilityCheckCache.Set(
+					address, reachable,
+					ec2d.networkReachabilityCheckCacheItemOpts...,
+				)
+			}
+			if reachable {
 				return true
 			}
 		}
