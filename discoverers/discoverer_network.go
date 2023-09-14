@@ -1,6 +1,7 @@
 package discoverers
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -31,6 +32,7 @@ var (
 		"80",   // default http port
 		"443",  // default https port
 		"3306", // default mysql port
+		"3389", // default rdp port
 		"5432", // default postgresql port
 		"5900", // default vnc port
 		"8080", // common http port
@@ -46,6 +48,10 @@ var (
 		"5.7.", // for MySQL 5.7.x
 		"8.0.", // for MySQL 8.0.x
 		"10.",  // for MariaDB 10.x.x
+	}
+
+	rdpBannerCanaries = [][]byte{
+		{0x03, 0x00, 0x00, 0x13}, // TPKT Header (ITU-T Rec. H.221) and length of message incl. TPKT header
 	}
 
 	sshBannerCanaries = []string{
@@ -201,6 +207,13 @@ func (nd *NetworkDiscoverer) Discover(ctx context.Context) *discovery.Result {
 									NetworkBaseDetails: networkBaseDetails,
 								},
 							})
+						case "rdp":
+							result.AddResources(discovery.Resource{
+								ResourceType: discovery.ResourceTypeNetworkRdpServer,
+								NetworkRdpServerDetails: &discovery.NetworkRdpServerDetails{
+									NetworkBaseDetails: networkBaseDetails,
+								},
+							})
 						case "ssh":
 							result.AddResources(discovery.Resource{
 								ResourceType: discovery.ResourceTypeNetworkSshServer,
@@ -257,7 +270,7 @@ func checkService(ip string, port string) string {
 	conn.SetDeadline(time.Now().Add(time.Millisecond * 1000)) // TODO: make configurable
 
 	resp := make([]byte, 1024)
-	_, err = conn.Read(resp)
+	n, err := conn.Read(resp)
 	if err != nil {
 		// postgresql normally returns a binary handshake... can't check for that
 		// so we assume if something's listening on port 5432, its a postgresql server
@@ -281,6 +294,15 @@ func checkService(ip string, port string) string {
 	for _, canary := range vncBannerCanaries {
 		if strings.Contains(response, canary) {
 			return "vnc"
+		}
+	}
+
+	for _, canary := range rdpBannerCanaries {
+		canaryLength := len(canary)
+		if n >= canaryLength {
+			if bytes.Equal(resp[:canaryLength], canary) {
+				return "rdp"
+			}
 		}
 	}
 
