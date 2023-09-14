@@ -34,6 +34,9 @@ const (
 	// ResourceTypeNetworkSshServer is the resource type for network-reachable SSH servers.
 	ResourceTypeNetworkSshServer = "network_ssh_server"
 
+	// ResourceTypeNetworkVncServer is the resource type for network-reachable VNC servers.
+	ResourceTypeNetworkVncServer = "network_vnc_server"
+
 	// Ec2InstanceSsmStatusOnline represents the SSM status of an EC2 instance that is associated and online.
 	Ec2InstanceSsmStatusOnline = "online"
 
@@ -201,6 +204,14 @@ type NetworkSshServerDetails struct {
 	// add any new fields as needed here
 }
 
+// NetworkVncServerDetails represents the details
+// of a discovered VNC server on the network.
+type NetworkVncServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
 // Resource represents a generic discovered resource.
 type Resource struct {
 	ResourceType string `json:"resource_type"`
@@ -215,6 +226,7 @@ type Resource struct {
 	NetworkMysqlServerDetails      *NetworkMysqlServerDetails      `json:"network_mysql_server_details,omitempty"`
 	NetworkPostgresqlServerDetails *NetworkPostgresqlServerDetails `json:"network_postgresql_server_details,omitempty"`
 	NetworkSshServerDetails        *NetworkSshServerDetails        `json:"network_ssh_server_details,omitempty"`
+	NetworkVncServerDetails        *NetworkVncServerDetails        `json:"network_vnc_server_details,omitempty"`
 
 	// add any new resource details here
 }

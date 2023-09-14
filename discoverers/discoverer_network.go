@@ -32,6 +32,7 @@ var (
 		"443",  // default https port
 		"3306", // default mysql port
 		"5432", // default postgresql port
+		"5900", // default vnc port
 		"8080", // common http port
 		"8443", // common https port
 	}
@@ -51,6 +52,15 @@ var (
 		"ssh",      // SSH v2, OpenSSH, LibSSH, etc...
 		"dropbear", // Dropbear server
 		"lsh",      // lsh server
+	}
+
+	vncBannerCanaries = []string{
+		"rfb 003.", // Remote Frame Buffer protocol version 3.x
+		"rfb 004.", // Remote Frame Buffer protocol version 4.x
+		"realvnc",  // RealVNC sometimes includes this in their banner
+		"tightvnc", // TightVNC sometimes includes this in their banner
+		"ultravnc", // UltraVNC sometimes includes this in their banner
+		"tigervnc", // TigerVNC sometimes includes this in their banner
 	}
 )
 
@@ -198,6 +208,13 @@ func (nd *NetworkDiscoverer) Discover(ctx context.Context) *discovery.Result {
 									NetworkBaseDetails: networkBaseDetails,
 								},
 							})
+						case "vnc":
+							result.AddResources(discovery.Resource{
+								ResourceType: discovery.ResourceTypeNetworkVncServer,
+								NetworkVncServerDetails: &discovery.NetworkVncServerDetails{
+									NetworkBaseDetails: networkBaseDetails,
+								},
+							})
 						}
 					}
 				}(ip, port)
@@ -259,6 +276,11 @@ func checkService(ip string, port string) string {
 	for _, canary := range sshBannerCanaries {
 		if strings.Contains(response, canary) {
 			return "ssh"
+		}
+	}
+	for _, canary := range vncBannerCanaries {
+		if strings.Contains(response, canary) {
+			return "vnc"
 		}
 	}
 
