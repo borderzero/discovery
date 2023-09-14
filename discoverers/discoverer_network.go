@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -272,6 +273,14 @@ func checkService(ip string, port string) string {
 	resp := make([]byte, 1024)
 	n, err := conn.Read(resp)
 	if err != nil {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			// some rdp servers do not initiate a handshake,
+			// so we assume if we have a timeout on the default
+			// rdp port we are talking to an rdp server.
+			if port == "3389" {
+				return "rdp"
+			}
+		}
 		// postgresql normally returns a binary handshake... can't check for that
 		// so we assume if something's listening on port 5432, its a postgresql server
 		if port == "5432" {
