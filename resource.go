@@ -31,8 +31,14 @@ const (
 	// ResourceTypeNetworkPostgresqlServer is the resource type for network-reachable PostgreSQL servers.
 	ResourceTypeNetworkPostgresqlServer = "network_postgresql_server"
 
+	// ResourceTypeNetworkRdpServer is the resource type for network-reachable RDP servers.
+	ResourceTypeNetworkRdpServer = "network_rdp_server"
+
 	// ResourceTypeNetworkSshServer is the resource type for network-reachable SSH servers.
 	ResourceTypeNetworkSshServer = "network_ssh_server"
+
+	// ResourceTypeNetworkVncServer is the resource type for network-reachable VNC servers.
+	ResourceTypeNetworkVncServer = "network_vnc_server"
 
 	// Ec2InstanceSsmStatusOnline represents the SSM status of an EC2 instance that is associated and online.
 	Ec2InstanceSsmStatusOnline = "online"
@@ -193,9 +199,25 @@ type NetworkPostgresqlServerDetails struct {
 	// add any new fields as needed here
 }
 
+// NetworkRdpServerDetails represents the details
+// of a discovered RDP server on the network.
+type NetworkRdpServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
 // NetworkSshServerDetails represents the details
 // of a discovered SSH server on the network.
 type NetworkSshServerDetails struct {
+	NetworkBaseDetails // extends
+
+	// add any new fields as needed here
+}
+
+// NetworkVncServerDetails represents the details
+// of a discovered VNC server on the network.
+type NetworkVncServerDetails struct {
 	NetworkBaseDetails // extends
 
 	// add any new fields as needed here
@@ -214,7 +236,9 @@ type Resource struct {
 	NetworkHttpsServerDetails      *NetworkHttpsServerDetails      `json:"network_https_server_details,omitempty"`
 	NetworkMysqlServerDetails      *NetworkMysqlServerDetails      `json:"network_mysql_server_details,omitempty"`
 	NetworkPostgresqlServerDetails *NetworkPostgresqlServerDetails `json:"network_postgresql_server_details,omitempty"`
+	NetworkRdpServerDetails        *NetworkRdpServerDetails        `json:"network_rdp_server_details,omitempty"`
 	NetworkSshServerDetails        *NetworkSshServerDetails        `json:"network_ssh_server_details,omitempty"`
+	NetworkVncServerDetails        *NetworkVncServerDetails        `json:"network_vnc_server_details,omitempty"`
 
 	// add any new resource details here
 }
