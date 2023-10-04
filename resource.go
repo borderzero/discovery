@@ -103,6 +103,7 @@ type AwsEcsServiceDetails struct {
 
 	ServiceName          string `json:"service_name"`
 	ClusterArn           string `json:"cluster_arn"`
+	ClusterName          string `json:"cluster_name"`
 	TaskDefinition       string `json:"task_definition"`
 	EnableExecuteCommand bool   `json:"enable_execute_command"`
 

@@ -3,6 +3,7 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -225,6 +226,7 @@ func (ecsd *AwsEcsDiscoverer) processEcsService(
 	ecsServiceDetails := &discovery.AwsEcsServiceDetails{
 		AwsBaseDetails:       awsBaseDetails,
 		ClusterArn:           aws.ToString(service.ClusterArn),
+		ClusterName:          clusterNameFromArn(aws.ToString(service.ClusterArn)),
 		ServiceName:          aws.ToString(service.ServiceName),
 		TaskDefinition:       aws.ToString(service.TaskDefinition),
 		EnableExecuteCommand: service.EnableExecuteCommand,
@@ -234,4 +236,12 @@ func (ecsd *AwsEcsDiscoverer) processEcsService(
 		ResourceType:         discovery.ResourceTypeAwsEcsService,
 		AwsEcsServiceDetails: ecsServiceDetails,
 	})
+}
+
+func clusterNameFromArn(arn string) string {
+	parts := strings.Split(arn, ":cluster/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
 }
