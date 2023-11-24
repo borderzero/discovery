@@ -158,7 +158,7 @@ func (rdsd *AwsRdsDiscoverer) Discover(ctx context.Context) *discovery.Result {
 		}
 		if instance.Endpoint != nil {
 			rdsInstanceDetails.EndpointAddress = aws.ToString(instance.Endpoint.Address)
-			rdsInstanceDetails.EndpointPort = instance.Endpoint.Port
+			rdsInstanceDetails.EndpointPort = aws.ToInt32(instance.Endpoint.Port)
 		} else {
 			rdsInstanceDetails.EndpointAddress = ""
 			rdsInstanceDetails.EndpointPort = -1
