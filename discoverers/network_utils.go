@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	reachabilityProbeTimeout  = time.Millisecond * 1000
+	reachabilityProbeTimeout  = time.Millisecond * 500
 	reachabilityProbeProtocol = "tcp"
 )
 

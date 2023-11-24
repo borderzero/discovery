@@ -124,6 +124,7 @@ type AwsRdsInstanceDetails struct {
 	DBSubnetGroupName    string `json:"db_subnet_group_name"`
 	EndpointAddress      string `json:"endpoint_address"`
 	EndpointPort         int32  `json:"endpoint_port"`
+	NetworkReachable     *bool  `json:"network_reachable,omitempty"`
 
 	// add any new fields as needed here
 }
