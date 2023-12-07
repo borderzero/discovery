@@ -68,8 +68,12 @@ func WithAwsRdsDiscovererNetworkReachabilityCheck(enabled bool) AwsRdsDiscoverer
 
 // WithAwsRdsDiscovererReachabilityRequired is the AwsRdsDiscovererOption
 // to exclude instances that are not reachable through any means from results.
+// If required is true, enabled is automatically set to true.
 func WithAwsRdsDiscovererReachabilityRequired(required bool) AwsRdsDiscovererOption {
-	return func(rdsd *AwsRdsDiscoverer) { rdsd.reachabilityRequired = required }
+	return func(rdsd *AwsRdsDiscoverer) {
+		rdsd.networkReachabilityCheckEnabled = rdsd.networkReachabilityCheckEnabled || required
+		rdsd.reachabilityRequired = required
+	}
 }
 
 // WithAwsRdsDiscovererNetworkReachabilityCheckCache is the AwsRdsDiscovererOption
