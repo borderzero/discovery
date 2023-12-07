@@ -85,9 +85,10 @@ func WithAwsEc2DiscovererDiscovererId(discovererId string) AwsEc2DiscovererOptio
 
 // WithAwsEc2DiscovererSsmStatusCheck is the AwsEc2DiscovererOption
 // to enable/disable checking instances' status with SSM.
+// If required is true, enabled is automatically set to true.
 func WithAwsEc2DiscovererSsmStatusCheck(enabled, required bool) AwsEc2DiscovererOption {
 	return func(ec2d *AwsEc2Discoverer) {
-		ec2d.ssmStatusCheckEnabled = enabled
+		ec2d.ssmStatusCheckEnabled = enabled || required
 		ec2d.ssmStatusCheckRequired = required
 	}
 }
@@ -100,8 +101,12 @@ func WithAwsEc2DiscovererNetworkReachabilityCheck(enabled bool) AwsEc2Discoverer
 
 // WithAwsEc2DiscovererReachabilityRequired is the AwsEc2DiscovererOption
 // to exclude instances that are not reachable through any means from results.
+// If required is true, enabled is automatically set to true.
 func WithAwsEc2DiscovererReachabilityRequired(required bool) AwsEc2DiscovererOption {
-	return func(ec2d *AwsEc2Discoverer) { ec2d.reachabilityRequired = required }
+	return func(ec2d *AwsEc2Discoverer) {
+		ec2d.networkReachabilityCheckEnabled = ec2d.networkReachabilityCheckEnabled || required
+		ec2d.reachabilityRequired = required
+	}
 }
 
 // WithAwsEc2DiscovererNetworkReachabilityCheckCache is the AwsEc2DiscovererOption
