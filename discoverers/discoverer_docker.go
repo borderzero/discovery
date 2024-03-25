@@ -7,7 +7,7 @@ import (
 
 	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/discovery"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
@@ -84,7 +84,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	containerListCtx, cancel := context.WithTimeout(ctx, dd.containerListTimeout)
 	defer cancel()
 
-	containers, err := cli.ContainerList(containerListCtx, types.ContainerListOptions{})
+	containers, err := cli.ContainerList(containerListCtx, container.ListOptions{})
 	if err != nil {
 		result.AddErrorf("failed to list Docker containers: %v", err)
 		return result
