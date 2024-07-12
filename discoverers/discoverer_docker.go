@@ -3,6 +3,8 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/borderzero/border0-go/lib/types/maps"
@@ -101,7 +103,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 		portBindings := map[string]string{}
 		for _, p := range container.Ports {
 			if p.IP != "" {
-				key := fmt.Sprintf("%s:%d", p.IP, p.PublicPort)
+				key := net.JoinHostPort(p.IP, strconv.Itoa(int(p.PublicPort)))
 				value := fmt.Sprintf("%d/%s", p.PrivatePort, p.Type)
 				portBindings[key] = value
 			}

@@ -3,6 +3,7 @@ package discoverers
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -406,7 +407,7 @@ func (ec2d *AwsEc2Discoverer) reachabilityCheck(
 
 	for _, ip := range ips {
 		for _, port := range ec2d.networkReachabilityCheckPorts.Slice() {
-			reachable := addressReachable(ctx, fmt.Sprintf("%s:%s", ip, port))
+			reachable := addressReachable(ctx, net.JoinHostPort(ip, port))
 			if reachable {
 				ec2d.networkReachabilityCheckCache.Set(
 					target,

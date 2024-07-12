@@ -195,7 +195,7 @@ func (ecsd *AwsEcsDiscoverer) processEcsListServicesPage(
 }
 
 func (ecsd *AwsEcsDiscoverer) processEcsService(
-	ctx context.Context,
+	_ context.Context,
 	service *types.Service,
 	result *discovery.Result,
 	awsAccountId string,

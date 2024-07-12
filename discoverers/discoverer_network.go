@@ -250,7 +250,7 @@ func checkService(ip string, port string) string {
 		}
 		req, _ := http.NewRequest(
 			http.MethodGet,
-			fmt.Sprintf("%s://%s:%s", scheme, ip, port),
+			fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(ip, port)),
 			nil,
 		)
 		resp, err := client.Do(req)
@@ -325,7 +325,7 @@ func checkService(ip string, port string) string {
 }
 
 func scanPort(ctx context.Context, ip, port string) (string, bool) {
-	if !addressReachable(ctx, fmt.Sprintf("%s:%s", ip, port)) {
+	if !addressReachable(ctx, net.JoinHostPort(ip, port)) {
 		return "", false
 	}
 

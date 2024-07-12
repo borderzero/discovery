@@ -2,7 +2,8 @@ package discoverers
 
 import (
 	"context"
-	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -269,7 +270,7 @@ func (rdsd *AwsRdsDiscoverer) reachabilityCheck(
 	}
 
 	for _, ip := range ips {
-		reachable := addressReachable(ctx, fmt.Sprintf("%s:%d", ip, port))
+		reachable := addressReachable(ctx, net.JoinHostPort(ip, strconv.Itoa(int(port))))
 		if reachable {
 			// set reachability to true in cache
 			rdsd.networkReachabilityCheckCache.Set(
