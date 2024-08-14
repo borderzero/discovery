@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.44.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.26.3
 	github.com/borderzero/border0-go v1.4.1
-	github.com/docker/docker v26.1.4+incompatible
+	github.com/docker/docker v26.1.5+incompatible
 	golang.org/x/sync v0.6.0
 	k8s.io/api v0.28.4
 	k8s.io/apimachinery v0.28.4
