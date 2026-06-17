@@ -9,8 +9,7 @@ import (
 
 	"github.com/borderzero/border0-go/lib/types/maps"
 	"github.com/borderzero/discovery"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 )
 
 const (
@@ -77,7 +76,7 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	result := discovery.NewResult(dd.discovererId)
 	defer result.Done()
 
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv)
 	if err != nil {
 		result.AddErrorf("failed to create Docker client: %v", err)
 		return result
@@ -86,13 +85,13 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 	containerListCtx, cancel := context.WithTimeout(ctx, dd.containerListTimeout)
 	defer cancel()
 
-	containers, err := cli.ContainerList(containerListCtx, container.ListOptions{})
+	containers, err := cli.ContainerList(containerListCtx, client.ContainerListOptions{})
 	if err != nil {
 		result.AddErrorf("failed to list Docker containers: %v", err)
 		return result
 	}
 
-	for _, container := range containers {
+	for _, container := range containers.Items {
 		if !maps.MatchesFilters(
 			container.Labels,
 			dd.inclusionContainerLabels,
@@ -102,8 +101,8 @@ func (dd *DockerDiscoverer) Discover(ctx context.Context) *discovery.Result {
 		}
 		portBindings := map[string]string{}
 		for _, p := range container.Ports {
-			if p.IP != "" {
-				key := net.JoinHostPort(p.IP, strconv.Itoa(int(p.PublicPort)))
+			if p.IP.IsValid() {
+				key := net.JoinHostPort(p.IP.String(), strconv.Itoa(int(p.PublicPort)))
 				value := fmt.Sprintf("%d/%s", p.PrivatePort, p.Type)
 				portBindings[key] = value
 			}
